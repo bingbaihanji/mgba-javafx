@@ -14,7 +14,23 @@ import java.nio.ByteBuffer;
 public final class NativeEmulator {
 
     static {
-        System.loadLibrary("mgba_frontend");
+        // 优先从已知路径加载（相对工作目录），找不到再走 java.library.path
+        String[] candidates = {
+            "build/native/windows-x64/dist/mgba_frontend.dll",
+            "native/dist/mgba_frontend.dll"
+        };
+        boolean loaded = false;
+        for (String path : candidates) {
+            java.io.File f = new java.io.File(path);
+            if (f.exists()) {
+                System.load(f.getAbsolutePath());
+                loaded = true;
+                break;
+            }
+        }
+        if (!loaded) {
+            System.loadLibrary("mgba_frontend");
+        }
     }
 
     private NativeEmulator() {

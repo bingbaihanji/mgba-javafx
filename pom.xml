@@ -39,19 +39,40 @@
             <version>${xuan.version}</version>
         </dependency>
 
-        <!-- 面板用 JavaFX 原生控件（M5 才用到，但依赖先备好：javafx-controls 会带上 base 与 graphics） -->
+        <!-- JavaFX 控件 + 图形 + 基础 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- 带 classifier 的是 Windows 原生库；本项目 Windows 专用（与框架一致） -->
+        <!-- Windows 原生库 -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>win</classifier>
+        </dependency>
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
             <classifier>win</classifier>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- JSON 序列化（M6）。**注解只出现在 persist/ 的 DTO 上**，model/ 的类上一个都没有
