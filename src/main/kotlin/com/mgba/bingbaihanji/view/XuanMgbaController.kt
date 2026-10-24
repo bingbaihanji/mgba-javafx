@@ -55,7 +55,16 @@ class XuanMgbaController : MenuActions {
     // ── 渲染（GL 线程调用）─────────────────────────────────────
 
     fun render(gc: Gc, width: Float, height: Float) {
-        videoRenderer.render(gc, if (romLoaded) core else null, width, height)
+        // 计算菜单栏和状态栏占的设备像素高度
+        val paneHeight = rootPane.height
+        if (paneHeight > 0) {
+            val scale = height / paneHeight.toFloat()
+            val topPx = ((rootPane.top?.layoutBounds?.height ?: 0.0) * scale).toFloat()
+            val bottomPx = ((rootPane.bottom?.layoutBounds?.height ?: 0.0) * scale).toFloat()
+            videoRenderer.render(gc, if (romLoaded) core else null, width, height, topPx, bottomPx)
+        } else {
+            videoRenderer.render(gc, if (romLoaded) core else null, width, height)
+        }
     }
 
     // ── 输入（JavaFX 线程调用）─────────────────────────────────

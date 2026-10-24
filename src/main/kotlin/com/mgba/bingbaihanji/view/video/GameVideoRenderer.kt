@@ -10,14 +10,32 @@ import kotlin.math.min
  * 游戏视频渲染器：从 [FrameSource] 获取帧，转换像素格式后绘制到 GL 画布。
  *
  * 支持 RGB565（mGBA 默认）和 XRGB8888 格式，等比 letterbox 缩放。
+ * 视频绘制在 [topOffset] 到 [canvasHeight - bottomOffset] 的中心区域内，
+ * 顶部/底部区域填充背景色（对应菜单栏和状态栏）。
  */
 class GameVideoRenderer {
 
     private var lastWidth = 0
     private var lastHeight = 0
 
-    /** 渲染一帧。无帧时绘制背景色。 */
-    fun render(gc: Gc, frameSource: FrameSource?, canvasWidth: Float, canvasHeight: Float) {
+    /**
+     * 渲染一帧。
+     *
+     * @param gc          绘图上下文
+     * @param frameSource 帧来源，null 时只画背景
+     * @param canvasWidth  GL 画布宽度（设备像素）
+     * @param canvasHeight GL 画布高度（设备像素）
+     * @param topOffset    顶部不可用区域高度（菜单栏，设备像素）
+     * @param bottomOffset 底部不可用区域高度（状态栏，设备像素）
+     */
+    fun render(
+        gc: Gc, frameSource: FrameSource?,
+        canvasWidth: Float, canvasHeight: Float,
+        topOffset: Float = 0f, bottomOffset: Float = 0f
+    ) {
+        val contentY = topOffset
+        val contentH = canvasHeight - topOffset - bottomOffset
+
         if (frameSource == null) {
             drawBackground(gc, canvasWidth, canvasHeight)
             return
@@ -33,15 +51,22 @@ class GameVideoRenderer {
             lastWidth = frame.width
             lastHeight = frame.height
 
-            val scale = min(canvasWidth / frame.width, canvasHeight / frame.height)
+            // 整个画布黑底（含菜单/状态栏后面）
+            gc.fill = 0xFF1A1A2E.toInt()
+            gc.fillRect(0f, 0f, canvasWidth, canvasHeight)
+
+            if (contentH <= 0f) return
+
+            // 在中心区域内 letterbox
+            val scale = min(canvasWidth / frame.width, contentH / frame.height)
             val dw = frame.width * scale
             val dh = frame.height * scale
             val dx = (canvasWidth - dw) / 2f
-            val dy = (canvasHeight - dh) / 2f
+            val dy = contentY + (contentH - dh) / 2f
 
-            // 黑底 + letterbox
+            // 视频区域黑底
             gc.fill = 0xFF000000.toInt()
-            gc.fillRect(0f, 0f, canvasWidth, canvasHeight)
+            gc.fillRect(0f, contentY, canvasWidth, contentH)
 
             drawFrame(gc, frame.buffer, frame.width, frame.height, frame.format, dx, dy, dw, dh)
         } finally {
