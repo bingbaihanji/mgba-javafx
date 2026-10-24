@@ -252,6 +252,7 @@ private fun com.bingbaihanji.xuan.renderer.Gc.drawFrame(
     dx: Float, dy: Float, dw: Float, dh: Float
 ) {
     val pixels = IntArray(w * h)
+    buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
     buffer.rewind()
     when (format) {
         2 -> for (i in 0 until w * h) {
