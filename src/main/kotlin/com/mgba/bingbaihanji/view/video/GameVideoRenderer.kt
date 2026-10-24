@@ -76,6 +76,13 @@ class GameVideoRenderer {
     private var lastWidth = 0
     private var lastHeight = 0
 
+    /** 最近一帧的画布尺寸（设备像素），调试信息用。 */
+    @Volatile
+    private var lastCanvasWidth = 0
+
+    @Volatile
+    private var lastCanvasHeight = 0
+
     // ── 对外设置 ──────────────────────────────────────────────
 
     /**
@@ -124,6 +131,9 @@ class GameVideoRenderer {
     /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
     fun resolution(): Pair<Int, Int> = lastWidth to lastHeight
 
+    /** 最近一帧的画布尺寸（设备像素）。 */
+    fun canvasSize(): Pair<Int, Int> = lastCanvasWidth to lastCanvasHeight
+
     // ── 渲染 ──────────────────────────────────────────────────
 
     /**
@@ -141,6 +151,8 @@ class GameVideoRenderer {
         canvasWidth: Float, canvasHeight: Float,
         topOffset: Float = 0f, bottomOffset: Float = 0f
     ) {
+        lastCanvasWidth = canvasWidth.toInt()
+        lastCanvasHeight = canvasHeight.toInt()
         if (disposeRequested) {
             disposeRequested = false
             disposeResources(gc)

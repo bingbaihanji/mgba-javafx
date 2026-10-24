@@ -42,6 +42,13 @@ public final class AppSettings {
     public String lastRomDirectory = "";
 
     /**
+     * 调试信息的分类开关（键为分类 key，缺省视为开启）。
+     *
+     * <p>用 Map 而不是固定字段：分类增减时旧配置文件仍然可用。
+     */
+    public java.util.Map<String, Boolean> debugSections = new java.util.LinkedHashMap<>();
+
+    /**
      * 复制一份设置（对话框确认时用，取消不能改动原对象）。
      *
      * @return 字段完全相同的副本
@@ -59,6 +66,7 @@ public final class AppSettings {
         copy.shaderPreset = shaderPreset;
         copy.customShaderPath = customShaderPath;
         copy.lastRomDirectory = lastRomDirectory;
+        copy.debugSections = new java.util.LinkedHashMap<>(debugSections);
         return copy;
     }
 

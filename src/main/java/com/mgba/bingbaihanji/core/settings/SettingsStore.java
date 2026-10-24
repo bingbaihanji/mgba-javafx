@@ -81,6 +81,9 @@ public final class SettingsStore {
         if (settings.lastRomDirectory == null) {
             settings.lastRomDirectory = "";
         }
+        if (settings.debugSections == null) {
+            settings.debugSections = new java.util.LinkedHashMap<>();
+        }
         return settings;
     }
 }

@@ -18,6 +18,7 @@ import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
 import com.mgba.bingbaihanji.platform.desktop.input.KeyMapping
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
+import com.mgba.bingbaihanji.view.debug.DebugCategory
 import com.mgba.bingbaihanji.view.debug.DebugOverlay
 import com.mgba.bingbaihanji.view.input.KeyMappingDialog
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
@@ -125,6 +126,13 @@ class XuanMgbaController : MenuActions {
     private var gameFps = 0.0
     private var drawFps = 0.0
 
+    /** 相邻两次渲染的间隔（指数滑动平均），GL 线程写、JavaFX 线程读。 */
+    @Volatile
+    private var lastRenderNanos = 0L
+
+    @Volatile
+    private var frameTimeMs = 0.0
+
     init {
         rootPane.top = menuBar
         rootPane.bottom = statusBar
@@ -156,6 +164,7 @@ class XuanMgbaController : MenuActions {
         menuBar.selectSpeed(settings.gameSpeed)
         menuBar.selectVolume(settings.soundVolume)
         menuBar.selectDebugOverlay(settings.showDebugOverlay)
+        menuBar.applyDebugSections(debugSectionMap())
 
         val savedPreset = runCatching { ShaderPreset.valueOf(settings.shaderPreset) }
             .getOrDefault(ShaderPreset.OFF)
@@ -204,6 +213,16 @@ class XuanMgbaController : MenuActions {
      */
     fun render(gc: Gc) {
         renderCount.incrementAndGet()
+
+        // 帧时间：指数滑动平均，避免数字每 500ms 跳一次
+        val now = System.nanoTime()
+        val previous = lastRenderNanos
+        if (previous != 0L) {
+            val interval = (now - previous) / 1_000_000.0
+            frameTimeMs = if (frameTimeMs <= 0.0) interval else frameTimeMs * 0.9 + interval * 0.1
+        }
+        lastRenderNanos = now
+
         val canvasWidth = gc.width.toFloat()
         val canvasHeight = gc.height.toFloat()
         val scale = if (rootPane.width > 0) canvasWidth / rootPane.width.toFloat() else 1f
@@ -510,6 +529,18 @@ class XuanMgbaController : MenuActions {
         refreshDebugOverlay()
     }
 
+    override fun onToggleDebugSection(key: String, enabled: Boolean) {
+        settings.debugSections[key] = enabled
+        persistSettings()
+        if (debugOverlay.isVisible) {
+            refreshDebugOverlay()
+        }
+    }
+
+    /** 分类 key → 是否显示（配置里没有的按开启处理）。 */
+    private fun debugSectionMap(): Map<String, Boolean> =
+        DebugCategory.entries.associate { it.key to (settings.debugSections[it.key] ?: true) }
+
     /** 采样一次统计数据并刷新浮层（JavaFX 线程，每 500ms 一次）。 */
     private fun refreshDebugOverlay() {
         val now = System.nanoTime()
@@ -526,26 +557,65 @@ class XuanMgbaController : MenuActions {
             lastRenderFrames = renderFrames
         }
 
-        val (width, height) = videoRenderer.resolution()
-        val memoryMb = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())
-            .shr(20)
-
-        val lines = mutableListOf<String>()
-        lines += "FPS  %.1f / 绘制 %.1f".format(gameFps, drawFps)
+        val values = LinkedHashMap<DebugCategory, String?>()
         val speed = loop?.speedMultiplier ?: speedMultiplier
-        lines += "速度  ${speed}x${if (paused) "（暂停）" else ""}"
-        lines += "画面  ${width}×${height}"
+        val speedMode = when {
+            paused -> "（暂停）"
+            fastForward -> "（快进）"
+            else -> ""
+        }
+
+        values[DebugCategory.FPS] = "FPS  游戏 %.1f / 绘制 %.1f   帧 %.1f ms\n丢帧 %d"
+            .format(gameFps, drawFps, frameTimeMs, current?.framesDropped() ?: 0L)
+        values[DebugCategory.SPEED] = "速度  ${speed}x$speedMode"
+
+        values[DebugCategory.SHADER] = when (shaderPreset) {
+            ShaderPreset.OFF -> "着色器  关闭"
+            ShaderPreset.CUSTOM -> "着色器  自定义 · ${customShaderFile?.name ?: "未选择"}"
+            else -> "着色器  ${shaderPreset.label()}"
+        }
+
+        val (width, height) = videoRenderer.resolution()
+        val (canvasWidth, canvasHeight) = videoRenderer.canvasSize()
+        values[DebugCategory.RESOLUTION] = "画面  ${width}×${height}\n" +
+                "画布  ${canvasWidth}×${canvasHeight}（设备像素）\n" +
+                "窗口  ${rootPane.width.toInt()}×${rootPane.height.toInt()}"
+
         if (current != null) {
             val av = current.avInfo()
-            lines += "音频  ${av.sampleRate.toInt()} Hz  队列 ${current.audioQueued()}"
-            lines += "欠载  ${current.audioUnderruns()}  溢出 ${current.audioOverflows()}"
-            lines += "丢帧  ${current.framesDropped()}"
-            lines += "核心  ${current.coreName()} ${current.coreVersion()}"
-        }
-        lines += "内存  ${memoryMb} MB"
-        currentRom?.let { lines += "ROM   ${it.name}" }
+            values[DebugCategory.AUDIO] =
+                "音频  ${av.sampleRate.toInt()} Hz   队列 ${current.audioQueued()}\n" +
+                "欠载 ${current.audioUnderruns()}   溢出 ${current.audioOverflows()}" +
+                "   音量 ${(volume * 100).toInt()}%"
 
-        debugOverlay.update(lines)
+            val usedSlots = (0 until SaveStateStore.SLOT_COUNT)
+                .count { saveSession?.hasState(it) == true }
+            values[DebugCategory.SAVE] =
+                "存档  电池 ${current.sramSize()} B" +
+                (if (current.rtcSize() > 0) "   RTC ${current.rtcSize()} B" else "") +
+                "\n槽位  $usedSlots/${SaveStateStore.SLOT_COUNT} 有存档"
+
+            values[DebugCategory.CORE] =
+                "核心  ${current.coreName()} ${current.coreVersion()}\n" +
+                "核心 FPS  %.2f".format(av.fps)
+        }
+
+        currentRom?.let { rom ->
+            values[DebugCategory.ROM] = "ROM   ${rom.name}\n路径  ${rom.parent}"
+        }
+
+        values[DebugCategory.SYSTEM] =
+            "系统  ${System.getProperty("os.name")} ${System.getProperty("os.arch")}\n" +
+            "Java  ${System.getProperty("java.version")}" +
+            "   JavaFX ${System.getProperty("javafx.version") ?: "-"}"
+
+        val runtime = Runtime.getRuntime()
+        val usedMb = (runtime.totalMemory() - runtime.freeMemory()).shr(20)
+        val maxMb = runtime.maxMemory().shr(20)
+        values[DebugCategory.MEMORY] = "内存  堆 ${usedMb}/${maxMb} MB"
+
+        val enabled = DebugCategory.entries.associateWith { settings.debugSections[it.key] ?: true }
+        debugOverlay.update(values, enabled)
     }
 
     // ── 设置 ──────────────────────────────────────────────────

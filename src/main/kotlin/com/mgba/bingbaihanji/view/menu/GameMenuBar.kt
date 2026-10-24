@@ -1,6 +1,7 @@
 package com.mgba.bingbaihanji.view.menu
 
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
+import com.mgba.bingbaihanji.view.debug.DebugCategory
 import javafx.scene.control.*
 import javafx.scene.input.KeyCombination
 
@@ -23,6 +24,9 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     /** 存档槽位菜单项，打开子菜单时刷新文字（显示保存时间/空槽）。 */
     private val saveSlotItems = mutableListOf<MenuItem>()
     private val loadSlotItems = mutableListOf<MenuItem>()
+
+    /** 调试信息分类的勾选项。 */
+    private val debugSectionItems = LinkedHashMap<String, CheckMenuItem>()
 
     /**
      * 槽位标签提供者，由控制器设置。
@@ -64,6 +68,17 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     /** 同步"调试信息"勾选状态（不触发回调）。 */
     fun selectDebugOverlay(enabled: Boolean) {
         debugCheckItem?.isSelected = enabled
+    }
+
+    /**
+     * 同步调试信息分类的勾选状态（不触发回调）。
+     *
+     * @param enabled 分类 key → 是否显示；缺省视为显示
+     */
+    fun applyDebugSections(enabled: Map<String, Boolean>) {
+        for ((key, item) in debugSectionItems) {
+            item.isSelected = enabled[key] ?: true
+        }
     }
 
     // ── 文件 ──────────────────────────────────────────────────
@@ -237,6 +252,17 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
             setOnAction { actions.onToggleDebugOverlay(isSelected) }
         }
         debugCheckItem = debugItem
+
+        val debugSections = Menu("调试信息分类(_D)")
+        for (category in DebugCategory.entries) {
+            val item = CheckMenuItem(category.label).apply {
+                isSelected = true
+                setOnAction { actions.onToggleDebugSection(category.key, isSelected) }
+            }
+            debugSectionItems[category.key] = item
+            debugSections.items.add(item)
+        }
+
         return Menu("设置(_S)").apply {
             items.addAll(
                 MenuItem("播放设置(_P)...").apply {
@@ -249,7 +275,8 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                     setOnAction { actions.onOpenCoreOptions() }
                 },
                 SeparatorMenuItem(),
-                debugItem
+                debugItem,
+                debugSections
             )
         }
     }
@@ -312,6 +339,9 @@ interface MenuActions {
 
     /** 开关调试信息浮层。 */
     fun onToggleDebugOverlay(enabled: Boolean)
+
+    /** 开关某一类调试信息。 */
+    fun onToggleDebugSection(key: String, enabled: Boolean)
 
     /** 打开设置对话框。 */
     fun onOpenSettings()
