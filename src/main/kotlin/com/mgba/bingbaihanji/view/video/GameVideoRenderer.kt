@@ -5,6 +5,7 @@ import com.bingbaihanji.xuan.renderer.DynamicImage
 import com.bingbaihanji.xuan.renderer.Gc
 import com.mgba.bingbaihanji.core.emulation.FrameData
 import com.mgba.bingbaihanji.core.emulation.FrameSource
+import com.mgba.bingbaihanji.platform.desktop.video.CustomShaderAdapter
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPresets
 import java.io.File
@@ -285,7 +286,11 @@ class GameVideoRenderer {
                 return
             }
             source = try {
-                ShaderPresets.readCustomSource(path.toPath())
+                // Android 版着色器是 GLSL ES 写法，直接交给桌面 GL 可能"链接成功但采样坐标未定义"，
+                // 画面全黑；这里统一转换成 330 core
+                CustomShaderAdapter.toDesktopFragmentShader(
+                    ShaderPresets.readCustomSource(path.toPath())
+                )
             } catch (e: IOException) {
                 fallback(gc, "读取着色器失败：${e.message}")
                 return

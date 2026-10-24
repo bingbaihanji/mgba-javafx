@@ -21,7 +21,14 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     private var debugCheckItem: CheckMenuItem? = null
 
     init {
-        menus.addAll(buildFileMenu(), buildEmulationMenu(), buildAudioMenu(), buildVideoMenu(), buildHelpMenu())
+        menus.addAll(
+            buildFileMenu(),
+            buildEmulationMenu(),
+            buildAudioMenu(),
+            buildVideoMenu(),
+            buildSettingsMenu(),
+            buildHelpMenu()
+        )
     }
 
     /**
@@ -55,10 +62,6 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
             MenuItem("打开 ROM(_O)").apply {
                 accelerator = KeyCombination.valueOf("Shortcut+O")
                 setOnAction { actions.onOpenRom() }
-            },
-            SeparatorMenuItem(),
-            MenuItem("设置(_S)...").apply {
-                setOnAction { actions.onOpenSettings() }
             },
             SeparatorMenuItem(),
             MenuItem("退出(_X)").apply {
@@ -101,9 +104,6 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 buildSaveStateMenu(),
                 MenuItem("金手指(_C)...").apply {
                     setOnAction { actions.onManageCheats() }
-                },
-                MenuItem("核心选项(_O)...").apply {
-                    setOnAction { actions.onOpenCoreOptions() }
                 }
             )
         }
@@ -192,13 +192,29 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                     setOnAction { actions.onToggleFullscreen() }
                 },
                 SeparatorMenuItem(),
-                shaderMenu,
+                shaderMenu
+            )
+        }
+    }
+
+    // ── 设置 ──────────────────────────────────────────────────
+
+    private fun buildSettingsMenu(): Menu {
+        val debugItem = CheckMenuItem("调试信息(_I)").apply {
+            accelerator = KeyCombination.valueOf("F3")
+            setOnAction { actions.onToggleDebugOverlay(isSelected) }
+        }
+        debugCheckItem = debugItem
+        return Menu("设置(_S)").apply {
+            items.addAll(
+                MenuItem("播放设置(_P)...").apply {
+                    setOnAction { actions.onOpenSettings() }
+                },
+                MenuItem("核心选项(_O)...").apply {
+                    setOnAction { actions.onOpenCoreOptions() }
+                },
                 SeparatorMenuItem(),
-                CheckMenuItem("调试信息(_I)").apply {
-                    accelerator = KeyCombination.valueOf("F3")
-                    setOnAction { actions.onToggleDebugOverlay(isSelected) }
-                    debugCheckItem = this
-                }
+                debugItem
             )
         }
     }
