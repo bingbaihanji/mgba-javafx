@@ -1,0 +1,30 @@
+# 构建产物
+target/
+build/
+bin/
+
+# IDE
+.idea/
+*.iml
+.xcodemap/
+
+# 文档不入库
+docs/
+
+# 第三方源码不入库（构建时本地存在）
+mgba-source/
+
+# 原生产物
+*.dll
+*.so
+*.dylib
+
+# 运行时文件
+*.state
+*.sav
+*.rtc
+*.log
+
+# 本地配置
+local.properties
+*.local
