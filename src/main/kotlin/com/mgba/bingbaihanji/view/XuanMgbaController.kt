@@ -9,6 +9,7 @@ import com.mgba.bingbaihanji.core.option.CoreOptionsStore
 import com.mgba.bingbaihanji.core.save.GameSaveSession
 import com.mgba.bingbaihanji.core.save.RomIdentity
 import com.mgba.bingbaihanji.core.save.SaveStateStore
+import com.mgba.bingbaihanji.core.save.ScreenshotWriter
 import com.mgba.bingbaihanji.core.settings.AppSettings
 import com.mgba.bingbaihanji.core.settings.SettingsStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
@@ -145,6 +146,7 @@ class XuanMgbaController : MenuActions {
         volume = settings.soundVolume / 100f
         videoRenderer.setStretchToFit(settings.stretchToFit)
         videoRenderer.setLinearFiltering(settings.linearFiltering)
+        videoRenderer.setIntegerScaling(settings.integerScaling)
         menuBar.selectSpeed(settings.gameSpeed)
         menuBar.selectVolume(settings.soundVolume)
         menuBar.selectDebugOverlay(settings.showDebugOverlay)
@@ -245,10 +247,25 @@ class XuanMgbaController : MenuActions {
     // ── MenuActions 实现 ──────────────────────────────────────
 
     override fun onOpenRom() {
-        FileChooser().apply {
+        val chooser = FileChooser().apply {
             title = "选择 ROM"
             extensionFilters.addAll(ROM_FILTERS)
-        }.showOpenDialog(rootPane.scene?.window)?.let { loadRom(it) }
+            // 从上次打开 ROM 的目录开始
+            val lastDirectory = settings.lastRomDirectory
+            if (lastDirectory.isNotBlank()) {
+                val directory = File(lastDirectory)
+                if (directory.isDirectory) {
+                    initialDirectory = directory
+                }
+            }
+        }
+        val file = chooser.showOpenDialog(rootPane.scene?.window) ?: return
+
+        file.parent?.let { parent ->
+            settings.lastRomDirectory = parent
+            persistSettings()
+        }
+        loadRom(file)
     }
 
     override fun onExit() {
@@ -409,6 +426,23 @@ class XuanMgbaController : MenuActions {
         statusBar.showMessage("着色器：${preset.label()}")
     }
 
+    override fun onTakeScreenshot() {
+        val current = core
+        if (current == null || !romLoaded) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val baseName = currentRom?.nameWithoutExtension ?: "screenshot"
+        try {
+            val file = ScreenshotWriter.save(current, AppPaths.screenshotsDirectory(), baseName)
+            statusBar.showMessage(
+                if (file != null) "截图已保存：${file.fileName}" else "当前没有可截取的画面"
+            )
+        } catch (e: Exception) {
+            statusBar.showMessage("截图失败：${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
     override fun onLoadCustomShader() {
         val file = FileChooser().apply {
             title = "选择片段着色器"
@@ -527,6 +561,7 @@ class XuanMgbaController : MenuActions {
 
         videoRenderer.setStretchToFit(updated.stretchToFit)
         videoRenderer.setLinearFiltering(updated.linearFiltering)
+        videoRenderer.setIntegerScaling(updated.integerScaling)
 
         var preset = runCatching { ShaderPreset.valueOf(updated.shaderPreset) }
             .getOrDefault(ShaderPreset.OFF)

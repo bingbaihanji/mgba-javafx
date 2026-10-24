@@ -11,6 +11,7 @@ import com.mgba.bingbaihanji.platform.desktop.video.ShaderPresets
 import java.io.File
 import java.io.IOException
 import java.nio.ByteOrder
+import kotlin.math.floor
 import kotlin.math.min
 
 /**
@@ -45,6 +46,10 @@ class GameVideoRenderer {
     /** 纹理是否使用线性过滤（关闭后像素边缘更锐利）。 */
     @Volatile
     private var linearFiltering = true
+
+    /** 是否只按整数倍放大（像素格整齐）。 */
+    @Volatile
+    private var integerScaling = false
 
     /** 纹理当前实际应用的过滤方式，避免每帧重复设置。 */
     private var appliedLinearFilter = true
@@ -105,6 +110,15 @@ class GameVideoRenderer {
      */
     fun setLinearFiltering(enabled: Boolean) {
         linearFiltering = enabled
+    }
+
+    /**
+     * 设置是否使用整数缩放（JavaFX 线程调用）。
+     *
+     * @param enabled true 时只按整数倍放大；窗口太小（不足 1 倍）时仍按比例缩放
+     */
+    fun setIntegerScaling(enabled: Boolean) {
+        integerScaling = enabled
     }
 
     /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
@@ -169,7 +183,9 @@ class GameVideoRenderer {
                     dw = canvasWidth
                     dh = contentH
                 } else {
-                    val scale = min(canvasWidth / frame.width, contentH / frame.height)
+                    val fitScale = min(canvasWidth / frame.width, contentH / frame.height)
+                    // 整数缩放：只取整数倍（窗口小于 1 倍时退化为正常缩放）
+                    val scale = if (integerScaling && fitScale >= 1f) floor(fitScale) else fitScale
                     dw = frame.width * scale
                     dh = frame.height * scale
                 }

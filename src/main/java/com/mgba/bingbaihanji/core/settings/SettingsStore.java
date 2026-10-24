@@ -78,6 +78,9 @@ public final class SettingsStore {
         if (settings.customShaderPath == null) {
             settings.customShaderPath = "";
         }
+        if (settings.lastRomDirectory == null) {
+            settings.lastRomDirectory = "";
+        }
         return settings;
     }
 }

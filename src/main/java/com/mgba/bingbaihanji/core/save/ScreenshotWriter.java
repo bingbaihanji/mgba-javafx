@@ -11,6 +11,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import javax.imageio.ImageIO;
 
@@ -90,6 +92,31 @@ public final class ScreenshotWriter {
         } finally {
             core.releaseFrame();
         }
+    }
+
+    /** 截图文件名里的时间戳格式（毫秒也带上，连按不会互相覆盖）。 */
+    private static final DateTimeFormatter FILE_STAMP =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
+
+    /**
+     * 截图并保存为 PNG。
+     *
+     * @param core      已加载 ROM 的核心
+     * @param directory 输出目录（不存在会自动创建）
+     * @param baseName  ROM 名（会自动清洗成合法文件名）
+     * @return 实际写出的文件；没有可用帧时返回 null
+     * @throws IOException 写入失败
+     */
+    public static Path save(EmulatorCore core, Path directory, String baseName) throws IOException {
+        BufferedImage image = capture(core);
+        if (image == null) {
+            return null;
+        }
+        String safeName = RomIdentity.sanitizeDirectoryName(
+                baseName == null || baseName.isBlank() ? "screenshot" : baseName);
+        Path file = directory.resolve(safeName + "-" + FILE_STAMP.format(LocalDateTime.now()) + ".png");
+        writePng(image, file);
+        return file;
     }
 
     /**

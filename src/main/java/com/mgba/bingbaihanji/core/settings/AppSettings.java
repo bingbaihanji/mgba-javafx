@@ -23,6 +23,9 @@ public final class AppSettings {
     /** 纹理线性过滤；关闭后放大时保持像素边缘清晰。 */
     public boolean linearFiltering = true;
 
+    /** 整数缩放：只按整数倍放大，像素格整齐（窗口足够大时才生效）。 */
+    public boolean integerScaling = false;
+
     /** 退出时保存到自动槽位。 */
     public boolean autoSaveOnExit = true;
 
@@ -34,6 +37,9 @@ public final class AppSettings {
 
     /** 自定义着色器文件路径，空串表示未选择。 */
     public String customShaderPath = "";
+
+    /** 上次打开 ROM 的目录（下次文件选择框从这里开始）。 */
+    public String lastRomDirectory = "";
 
     /**
      * 复制一份设置（对话框确认时用，取消不能改动原对象）。
@@ -47,10 +53,12 @@ public final class AppSettings {
         copy.enableSound = enableSound;
         copy.stretchToFit = stretchToFit;
         copy.linearFiltering = linearFiltering;
+        copy.integerScaling = integerScaling;
         copy.autoSaveOnExit = autoSaveOnExit;
         copy.showDebugOverlay = showDebugOverlay;
         copy.shaderPreset = shaderPreset;
         copy.customShaderPath = customShaderPath;
+        copy.lastRomDirectory = lastRomDirectory;
         return copy;
     }
 

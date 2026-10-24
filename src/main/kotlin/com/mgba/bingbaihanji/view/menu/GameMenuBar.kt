@@ -212,6 +212,10 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                     accelerator = KeyCombination.valueOf("F11")
                     setOnAction { actions.onToggleFullscreen() }
                 },
+                MenuItem("截图(_T)").apply {
+                    accelerator = KeyCombination.valueOf("F12")
+                    setOnAction { actions.onTakeScreenshot() }
+                },
                 SeparatorMenuItem(),
                 shaderMenu
             )
@@ -299,6 +303,9 @@ interface MenuActions {
 
     /** 选择并加载自定义 GLSL 片段着色器。 */
     fun onLoadCustomShader()
+
+    /** 保存当前画面为 PNG 截图。 */
+    fun onTakeScreenshot()
 
     /** 开关调试信息浮层。 */
     fun onToggleDebugOverlay(enabled: Boolean)

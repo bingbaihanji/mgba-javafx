@@ -51,6 +51,11 @@ public final class AppPaths {
         return ensure(configDirectory().resolve("shaders"));
     }
 
+    /** 截图目录。 */
+    public static Path screenshotsDirectory() {
+        return ensure(configDirectory().resolve("screenshots"));
+    }
+
     /** 创建目录（含父目录）；失败时抛出 {@link UncheckedIOException}。 */
     private static Path ensure(Path directory) {
         try {
