@@ -34,6 +34,9 @@ public final class AudioPump {
 
     private Thread thread;
 
+    /** 音频设备打开失败时的回调（在泵线程调用，实现方自行切回 UI 线程）。 */
+    private volatile Runnable onAudioUnavailable;
+
     public AudioPump(AudioSource source, AudioSink sink) {
         this.source = source;
         this.sink = sink;
@@ -57,6 +60,15 @@ public final class AudioPump {
         thread = new Thread(this::pumpLoop, "mgba-audio");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    /**
+     * 注册"音频设备打开失败"的回调。
+     *
+     * @param callback 回调（泵线程调用）
+     */
+    public void setOnAudioUnavailable(Runnable callback) {
+        this.onAudioUnavailable = callback;
     }
 
     /** 停止音频泵并等待线程退出。 */
@@ -96,6 +108,10 @@ public final class AudioPump {
         } catch (RuntimeException e) {
             audioAvailable = false;
             System.err.println("音频设备不可用，本次运行将静音: " + e.getMessage());
+            Runnable callback = onAudioUnavailable;
+            if (callback != null) {
+                callback.run();
+            }
         }
 
         while (running) {

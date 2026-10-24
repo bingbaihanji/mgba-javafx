@@ -353,8 +353,10 @@ class XuanMgbaController : MenuActions {
         loop?.setSpeedMultiplier(speed)
         applyEffectiveVolume()
         statusBar.setSpeed(speed)
-        if (speed != 1.0) {
-            statusBar.showMessage("${speed}x（倍速下音频静音）", 2.5)
+        if (speed > 1.0) {
+            statusBar.showMessage("${speed}x（快进时音频静音）", 2.5)
+        } else if (speed < 1.0) {
+            statusBar.showMessage("${speed}x（慢放时音频可能断续）", 2.5)
         }
         settings.gameSpeed = speed
         persistSettings()
@@ -576,12 +578,14 @@ class XuanMgbaController : MenuActions {
     /**
      * 把音量同步到音频设备。
      *
-     * <p>非 1x 速度时强制静音：音频环按真实时间消费，倍速只会让缓冲积压后
-     * 大段丢帧——听起来是断续的噪音，不如安静地快进。
+     * <p>只有快进（速度 &gt; 1x）才强制静音：此时音频产量超过声卡消费速度，
+     * 环形缓冲会积压然后大段丢帧，听到的是断续噪音。
+     * **慢放（&lt; 1x）不静音**——之前对所有非 1x 速度一律静音，
+     * 用户把速度设成 0.5x 后加载 ROM 就完全没有声音，看起来像音频坏了。
      */
     private fun applyEffectiveVolume() {
         val speed = loop?.speedMultiplier ?: speedMultiplier
-        val effective = if (!settings.enableSound || speed != 1.0) 0f else volume
+        val effective = if (!settings.enableSound || speed > 1.0) 0f else volume
         audioSink?.setVolume(effective)
     }
 
@@ -662,6 +666,12 @@ class XuanMgbaController : MenuActions {
             val sink = SourceDataLineAudioSink(av.sampleRate)
             audioSink = sink
             val pump = AudioPump(c, sink)
+            // 设备打不开时明确提示，而不是让画面正常但完全没有声音
+            pump.setOnAudioUnavailable {
+                Platform.runLater {
+                    statusBar.showMessage("音频设备打开失败，本次运行将静音", 6.0)
+                }
+            }
             audioPump = pump
             pump.start()
 
