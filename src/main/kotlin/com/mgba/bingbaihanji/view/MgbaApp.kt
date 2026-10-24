@@ -13,18 +13,25 @@ fun main() = xuan {
     width = 960.0
     height = 640.0
 
-    val controller = XuanMgbaController()
+    // 延迟到 onScene 创建（那时 JavaFX toolkit 已就绪）
+    var controller: XuanMgbaController? = null
 
     // 渲染（GL 线程）
     onRender {
-        controller.render(this, width.toFloat(), height.toFloat())
+        controller?.render(this, width.toFloat(), height.toFloat())
+            ?: run {
+                fill = 0xFF1A1A2E.toInt()
+                fillRect(0f, 0f, width.toFloat(), height.toFloat())
+            }
     }
 
     // 场景搭建（JavaFX 线程）
     onScene { scene ->
-        overlay.children.add(controller.rootPane)
+        val c = XuanMgbaController()
+        controller = c
 
-        scene.addEventFilter(KeyEvent.KEY_PRESSED) { e -> controller.handleKeyPressed(e) }
-        scene.addEventFilter(KeyEvent.KEY_RELEASED) { e -> controller.handleKeyReleased(e) }
+        overlay.children.add(c.rootPane)
+        scene.addEventFilter(KeyEvent.KEY_PRESSED) { e -> c.handleKeyPressed(e) }
+        scene.addEventFilter(KeyEvent.KEY_RELEASED) { e -> c.handleKeyReleased(e) }
     }
 }
