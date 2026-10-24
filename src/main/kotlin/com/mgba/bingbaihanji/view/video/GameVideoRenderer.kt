@@ -37,6 +37,10 @@ class GameVideoRenderer {
     @Volatile
     private var disposeRequested = false
 
+    /** 是否拉伸填满中心区域（关闭时等比 letterbox）。 */
+    @Volatile
+    private var stretchToFit = false
+
     /** 着色器加载/编译失败回调（**GL 线程**调用，调用方自行切回 JavaFX 线程）。 */
     @Volatile
     var onShaderError: ((String) -> Unit)? = null
@@ -75,6 +79,15 @@ class GameVideoRenderer {
     /** 请求释放 GL 资源（JavaFX 线程调用，真正的释放发生在下一帧渲染时）。 */
     fun requestDispose() {
         disposeRequested = true
+    }
+
+    /**
+     * 设置是否拉伸填满中心区域。
+     *
+     * @param enabled true 时忽略宽高比铺满；false 时等比缩放并留黑边
+     */
+    fun setStretchToFit(enabled: Boolean) {
+        stretchToFit = enabled
     }
 
     /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
@@ -126,9 +139,16 @@ class GameVideoRenderer {
 
             if (contentH <= 0f) return
 
-            val scale = min(canvasWidth / frame.width, contentH / frame.height)
-            val dw = frame.width * scale
-            val dh = frame.height * scale
+            val dw: Float
+            val dh: Float
+            if (stretchToFit) {
+                dw = canvasWidth
+                dh = contentH
+            } else {
+                val scale = min(canvasWidth / frame.width, contentH / frame.height)
+                dw = frame.width * scale
+                dh = frame.height * scale
+            }
             val dx = (canvasWidth - dw) / 2f
             val dy = contentY + (contentH - dh) / 2f
 

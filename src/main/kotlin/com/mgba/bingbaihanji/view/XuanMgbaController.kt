@@ -7,26 +7,37 @@ import com.mgba.bingbaihanji.core.emulation.GbaButton
 import com.mgba.bingbaihanji.core.save.GameSaveSession
 import com.mgba.bingbaihanji.core.save.RomIdentity
 import com.mgba.bingbaihanji.core.save.SaveStateStore
+import com.mgba.bingbaihanji.core.settings.AppSettings
+import com.mgba.bingbaihanji.core.settings.SettingsStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
 import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
+import com.mgba.bingbaihanji.view.debug.DebugOverlay
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
+import com.mgba.bingbaihanji.view.settings.SettingsDialog
 import com.mgba.bingbaihanji.view.status.GameStatusBar
 import com.mgba.bingbaihanji.view.video.GameVideoRenderer
 import com.bingbaihanji.xuan.renderer.Gc
+import javafx.animation.KeyFrame
+import javafx.animation.Timeline
 import javafx.application.Platform
+import javafx.geometry.Insets
+import javafx.geometry.Pos
 import javafx.scene.control.Alert
 import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyEvent
 import javafx.scene.layout.BorderPane
+import javafx.scene.layout.StackPane
 import javafx.stage.FileChooser
+import javafx.util.Duration
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 组件组装与业务协调器。
@@ -42,6 +53,12 @@ class XuanMgbaController : MenuActions {
     private val statusBar = GameStatusBar()
     private val videoRenderer = GameVideoRenderer()
 
+    /** BorderPane 的中心容器：透明，叠放调试浮层。 */
+    private val centerStack = StackPane().apply { isPickOnBounds = false }
+
+    /** 调试信息浮层。 */
+    private val debugOverlay = DebugOverlay()
+
     // ── 模拟器状态 ────────────────────────────────────────────
     private var core: JniEmulatorCore? = null
     private var loop: EmulationLoop? = null
@@ -51,6 +68,10 @@ class XuanMgbaController : MenuActions {
     private var paused = false
     private var speedMultiplier = 4.0
     private var volume = 1.0f
+
+    /** 设置存储与当前设置。 */
+    private val settingsStore = SettingsStore()
+    private var settings = settingsStore.load()
 
     /** 当前 ROM 文件，复位时重新加载用。 */
     private var currentRom: File? = null
@@ -74,13 +95,23 @@ class XuanMgbaController : MenuActions {
     /** 用户自定义着色器文件（切到 CUSTOM 时使用）。 */
     private var customShaderFile: File? = null
 
+    // ── 调试信息采样 ──────────────────────────────────────────
+    private val renderCount = AtomicLong()
+    private var debugTimer: Timeline? = null
+    private var lastSampleNanos = 0L
+    private var lastGameFrames = 0L
+    private var lastRenderFrames = 0L
+    private var gameFps = 0.0
+    private var drawFps = 0.0
+
     init {
         rootPane.top = menuBar
         rootPane.bottom = statusBar
         // center 留空，让底层 GL 画布透出
-        rootPane.center = javafx.scene.layout.StackPane().apply {
-            isPickOnBounds = false
-        }
+        centerStack.children.add(debugOverlay)
+        StackPane.setAlignment(debugOverlay, Pos.TOP_LEFT)
+        StackPane.setMargin(debugOverlay, Insets(8.0))
+        rootPane.center = centerStack
         rootPane.isPickOnBounds = false
 
         // 着色器在 GL 线程编译，失败时切回 JavaFX 线程提示并恢复 Off
@@ -88,9 +119,29 @@ class XuanMgbaController : MenuActions {
             Platform.runLater {
                 statusBar.showMessage("着色器加载失败：$message", 5.0)
                 shaderPreset = ShaderPreset.OFF
+                settings.shaderPreset = ShaderPreset.OFF.name
                 menuBar.selectShaderPreset(ShaderPreset.OFF)
                 videoRenderer.setShaderPreset(ShaderPreset.OFF)
             }
+        }
+
+        // 应用持久化设置（此时 JavaFX 控件已就绪）
+        speedMultiplier = settings.gameSpeed
+        volume = settings.effectiveVolume()
+        videoRenderer.setStretchToFit(settings.stretchToFit)
+        menuBar.selectSpeed(settings.gameSpeed)
+        menuBar.selectVolume(settings.soundVolume)
+        menuBar.selectDebugOverlay(settings.showDebugOverlay)
+
+        val savedPreset = runCatching { ShaderPreset.valueOf(settings.shaderPreset) }
+            .getOrDefault(ShaderPreset.OFF)
+        shaderPreset = savedPreset
+        customShaderFile = settings.customShaderPath.takeIf { it.isNotBlank() }?.let(::File)
+        videoRenderer.setShaderPreset(savedPreset, customShaderFile)
+        menuBar.selectShaderPreset(savedPreset)
+
+        if (settings.showDebugOverlay) {
+            onToggleDebugOverlay(true)
         }
     }
 
@@ -118,6 +169,7 @@ class XuanMgbaController : MenuActions {
      * 把菜单栏/状态栏的逻辑高度换算成设备像素后交给渲染器避让。
      */
     fun render(gc: Gc) {
+        renderCount.incrementAndGet()
         val canvasWidth = gc.width.toFloat()
         val canvasHeight = gc.height.toFloat()
         val scale = if (rootPane.width > 0) canvasWidth / rootPane.width.toFloat() else 1f
@@ -261,6 +313,8 @@ class XuanMgbaController : MenuActions {
         speedMultiplier = speed
         loop?.setSpeedMultiplier(speed)
         statusBar.setSpeed(speed)
+        settings.gameSpeed = speed
+        persistSettings()
     }
 
     override fun onToggleFastForward() {
@@ -277,6 +331,8 @@ class XuanMgbaController : MenuActions {
         }
         shaderPreset = preset
         videoRenderer.setShaderPreset(preset, customShaderFile)
+        settings.shaderPreset = preset.name
+        persistSettings()
         statusBar.showMessage("着色器：${preset.label()}")
     }
 
@@ -299,7 +355,118 @@ class XuanMgbaController : MenuActions {
         shaderPreset = ShaderPreset.CUSTOM
         videoRenderer.setShaderPreset(ShaderPreset.CUSTOM, file)
         menuBar.selectShaderPreset(ShaderPreset.CUSTOM)
+        settings.customShaderPath = file.absolutePath
+        settings.shaderPreset = ShaderPreset.CUSTOM.name
+        persistSettings()
         statusBar.showMessage("已加载着色器：${file.name}")
+    }
+
+    // ── 调试信息 ──────────────────────────────────────────────
+
+    override fun onToggleDebugOverlay(enabled: Boolean) {
+        debugOverlay.isVisible = enabled
+        settings.showDebugOverlay = enabled
+        menuBar.selectDebugOverlay(enabled)
+        persistSettings()
+        if (!enabled) {
+            debugTimer?.stop()
+            debugTimer = null
+            return
+        }
+
+        lastSampleNanos = System.nanoTime()
+        lastGameFrames = core?.frameCount() ?: 0L
+        lastRenderFrames = renderCount.get()
+        gameFps = 0.0
+        drawFps = 0.0
+
+        debugTimer?.stop()
+        debugTimer = Timeline(
+            KeyFrame(Duration.millis(500.0), { refreshDebugOverlay() })
+        ).apply {
+            cycleCount = Timeline.INDEFINITE
+            play()
+        }
+        refreshDebugOverlay()
+    }
+
+    /** 采样一次统计数据并刷新浮层（JavaFX 线程，每 500ms 一次）。 */
+    private fun refreshDebugOverlay() {
+        val now = System.nanoTime()
+        val elapsed = (now - lastSampleNanos) / 1_000_000_000.0
+        val current = core
+        val gameFrames = current?.frameCount() ?: 0L
+        val renderFrames = renderCount.get()
+
+        if (elapsed > 0.05) {
+            gameFps = (gameFrames - lastGameFrames) / elapsed
+            drawFps = (renderFrames - lastRenderFrames) / elapsed
+            lastSampleNanos = now
+            lastGameFrames = gameFrames
+            lastRenderFrames = renderFrames
+        }
+
+        val (width, height) = videoRenderer.resolution()
+        val memoryMb = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory())
+            .shr(20)
+
+        val lines = mutableListOf<String>()
+        lines += "FPS  %.1f / 绘制 %.1f".format(gameFps, drawFps)
+        val speed = loop?.speedMultiplier ?: speedMultiplier
+        lines += "速度  ${speed}x${if (paused) "（暂停）" else ""}"
+        lines += "画面  ${width}×${height}"
+        if (current != null) {
+            val av = current.avInfo()
+            lines += "音频  ${av.sampleRate.toInt()} Hz  队列 ${current.audioQueued()}"
+            lines += "欠载  ${current.audioUnderruns()}  溢出 ${current.audioOverflows()}"
+            lines += "丢帧  ${current.framesDropped()}"
+            lines += "核心  ${current.coreName()} ${current.coreVersion()}"
+        }
+        lines += "内存  ${memoryMb} MB"
+        currentRom?.let { lines += "ROM   ${it.name}" }
+
+        debugOverlay.update(lines)
+    }
+
+    // ── 设置 ──────────────────────────────────────────────────
+
+    override fun onOpenSettings() {
+        SettingsDialog(rootPane.scene?.window, settings) { updated -> applySettings(updated) }.show()
+    }
+
+    /** 应用设置：同步到帧循环、音频、渲染器与菜单选中状态，并持久化。 */
+    private fun applySettings(updated: AppSettings) {
+        settings = updated
+
+        speedMultiplier = updated.gameSpeed
+        loop?.setSpeedMultiplier(updated.gameSpeed)
+        statusBar.setSpeed(updated.gameSpeed)
+        menuBar.selectSpeed(updated.gameSpeed)
+
+        volume = updated.effectiveVolume()
+        audioSink?.setVolume(volume)
+        menuBar.selectVolume(updated.soundVolume)
+
+        videoRenderer.setStretchToFit(updated.stretchToFit)
+
+        val preset = runCatching { ShaderPreset.valueOf(updated.shaderPreset) }
+            .getOrDefault(ShaderPreset.OFF)
+        shaderPreset = preset
+        updated.customShaderPath.takeIf { it.isNotBlank() }?.let { customShaderFile = File(it) }
+        videoRenderer.setShaderPreset(preset, customShaderFile)
+        menuBar.selectShaderPreset(preset)
+
+        if (debugOverlay.isVisible != updated.showDebugOverlay) {
+            onToggleDebugOverlay(updated.showDebugOverlay)
+        }
+
+        persistSettings()
+        statusBar.showMessage("设置已应用")
+    }
+
+    private fun persistSettings() {
+        runCatching { settingsStore.save(settings) }
+            .onFailure { System.err.println("保存设置失败: ${it.message}") }
     }
 
     override fun onManageCheats() {
@@ -312,12 +479,19 @@ class XuanMgbaController : MenuActions {
     }
 
     override fun onToggleMute() {
-        audioSink?.setVolume(0f)
+        settings.enableSound = !settings.enableSound
+        volume = settings.effectiveVolume()
+        audioSink?.setVolume(volume)
+        statusBar.showMessage(if (settings.enableSound) "声音已开启" else "已静音")
+        persistSettings()
     }
 
     override fun onVolumeChanged(volume: Float) {
         this.volume = volume
         audioSink?.setVolume(volume)
+        settings.soundVolume = (volume * 100).toInt()
+        settings.enableSound = true
+        persistSettings()
     }
 
     override fun onToggleFullscreen() {
@@ -409,10 +583,12 @@ class XuanMgbaController : MenuActions {
         }
     }
 
-    /** 退出前保存：自动槽位 + 电池存档。 */
+    /** 退出前保存：按设置决定是否写自动槽位，电池存档总是保存。 */
     private fun saveBeforeExit() {
         val session = saveSession ?: return
-        runCatching { session.saveState(SaveStateStore.AUTO_SLOT) }
+        if (settings.autoSaveOnExit) {
+            runCatching { session.saveState(SaveStateStore.AUTO_SLOT) }
+        }
         runCatching { session.saveBattery() }
     }
 

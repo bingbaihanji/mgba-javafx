@@ -15,6 +15,11 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     private val shaderGroup = ToggleGroup()
     private val shaderRadios = mutableMapOf<ShaderPreset, RadioMenuItem>()
 
+    /** 倍速/音量单选项，供设置载入后同步选中状态。 */
+    private val speedRadios = mutableMapOf<Double, RadioMenuItem>()
+    private val volumeRadios = mutableMapOf<Int, RadioMenuItem>()
+    private var debugCheckItem: CheckMenuItem? = null
+
     init {
         menus.addAll(buildFileMenu(), buildEmulationMenu(), buildAudioMenu(), buildVideoMenu(), buildHelpMenu())
     }
@@ -28,6 +33,21 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         shaderRadios[preset]?.isSelected = true
     }
 
+    /** 同步倍速单选状态（不触发回调）。 */
+    fun selectSpeed(speed: Double) {
+        speedRadios.entries.minByOrNull { kotlin.math.abs(it.key - speed) }?.value?.isSelected = true
+    }
+
+    /** 同步音量单选状态（不触发回调）。 */
+    fun selectVolume(percent: Int) {
+        volumeRadios.entries.minByOrNull { kotlin.math.abs(it.key - percent) }?.value?.isSelected = true
+    }
+
+    /** 同步"调试信息"勾选状态（不触发回调）。 */
+    fun selectDebugOverlay(enabled: Boolean) {
+        debugCheckItem?.isSelected = enabled
+    }
+
     // ── 文件 ──────────────────────────────────────────────────
 
     private fun buildFileMenu() = Menu("文件(_F)").apply {
@@ -35,6 +55,10 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
             MenuItem("打开 ROM(_O)").apply {
                 accelerator = KeyCombination.valueOf("Shortcut+O")
                 setOnAction { actions.onOpenRom() }
+            },
+            SeparatorMenuItem(),
+            MenuItem("设置(_S)...").apply {
+                setOnAction { actions.onOpenSettings() }
             },
             SeparatorMenuItem(),
             MenuItem("退出(_X)").apply {
@@ -50,11 +74,13 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         val speedGroup = ToggleGroup()
         val speedMenu = Menu("速度(_S)")
         for (speed in listOf(0.5, 1.0, 2.0, 4.0, 8.0, 16.0)) {
-            speedMenu.items.add(RadioMenuItem("${speed}x").apply {
+            val item = RadioMenuItem("${speed}x").apply {
                 toggleGroup = speedGroup
                 isSelected = speed == 4.0
                 setOnAction { actions.onSpeedChanged(speed) }
-            })
+            }
+            speedRadios[speed] = item
+            speedMenu.items.add(item)
         }
 
         return Menu("模拟(_E)").apply {
@@ -114,11 +140,13 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         val volumeGroup = ToggleGroup()
         val volumeMenu = Menu("音量(_V)")
         for (pct in listOf(25, 50, 75, 100)) {
-            volumeMenu.items.add(RadioMenuItem("${pct}%").apply {
+            val item = RadioMenuItem("${pct}%").apply {
                 toggleGroup = volumeGroup
                 isSelected = pct == 100
                 setOnAction { actions.onVolumeChanged(pct / 100f) }
-            })
+            }
+            volumeRadios[pct] = item
+            volumeMenu.items.add(item)
         }
 
         return Menu("音频(_A)").apply {
@@ -158,7 +186,13 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                     setOnAction { actions.onToggleFullscreen() }
                 },
                 SeparatorMenuItem(),
-                shaderMenu
+                shaderMenu,
+                SeparatorMenuItem(),
+                CheckMenuItem("调试信息(_I)").apply {
+                    accelerator = KeyCombination.valueOf("F3")
+                    setOnAction { actions.onToggleDebugOverlay(isSelected) }
+                    debugCheckItem = this
+                }
             )
         }
     }
@@ -212,4 +246,10 @@ interface MenuActions {
 
     /** 选择并加载自定义 GLSL 片段着色器。 */
     fun onLoadCustomShader()
+
+    /** 开关调试信息浮层。 */
+    fun onToggleDebugOverlay(enabled: Boolean)
+
+    /** 打开设置对话框。 */
+    fun onOpenSettings()
 }
