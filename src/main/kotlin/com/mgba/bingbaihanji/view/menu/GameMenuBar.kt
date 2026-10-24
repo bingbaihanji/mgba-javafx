@@ -1,5 +1,6 @@
 package com.mgba.bingbaihanji.view.menu
 
+import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import javafx.scene.control.*
 import javafx.scene.input.KeyCombination
 
@@ -10,8 +11,21 @@ import javafx.scene.input.KeyCombination
  */
 class GameMenuBar(private val actions: MenuActions) : MenuBar() {
 
+    /** 着色器单选项，供控制器在加载自定义着色器后同步选中状态。 */
+    private val shaderGroup = ToggleGroup()
+    private val shaderRadios = mutableMapOf<ShaderPreset, RadioMenuItem>()
+
     init {
         menus.addAll(buildFileMenu(), buildEmulationMenu(), buildAudioMenu(), buildVideoMenu(), buildHelpMenu())
+    }
+
+    /**
+     * 选中某个着色器预设（不触发回调）。
+     *
+     * @param preset 预设
+     */
+    fun selectShaderPreset(preset: ShaderPreset) {
+        shaderRadios[preset]?.isSelected = true
     }
 
     // ── 文件 ──────────────────────────────────────────────────
@@ -121,13 +135,32 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
 
     // ── 视频 ──────────────────────────────────────────────────
 
-    private fun buildVideoMenu() = Menu("视频(_V)").apply {
-        items.addAll(
-            MenuItem("全屏(_F)").apply {
-                accelerator = KeyCombination.valueOf("F11")
-                setOnAction { actions.onToggleFullscreen() }
+    private fun buildVideoMenu(): Menu {
+        val shaderMenu = Menu("着色器(_S)")
+        for (preset in ShaderPreset.values()) {
+            val item = RadioMenuItem(preset.label()).apply {
+                toggleGroup = shaderGroup
+                isSelected = preset == ShaderPreset.OFF
+                setOnAction { actions.onShaderChanged(preset) }
             }
-        )
+            shaderRadios[preset] = item
+            shaderMenu.items.add(item)
+        }
+        shaderMenu.items.add(SeparatorMenuItem())
+        shaderMenu.items.add(MenuItem("加载自定义着色器...").apply {
+            setOnAction { actions.onLoadCustomShader() }
+        })
+
+        return Menu("视频(_V)").apply {
+            items.addAll(
+                MenuItem("全屏(_F)").apply {
+                    accelerator = KeyCombination.valueOf("F11")
+                    setOnAction { actions.onToggleFullscreen() }
+                },
+                SeparatorMenuItem(),
+                shaderMenu
+            )
+        }
     }
 
     // ── 帮助 ──────────────────────────────────────────────────
@@ -173,4 +206,10 @@ interface MenuActions {
 
     /** 打开金手指管理对话框。 */
     fun onManageCheats()
+
+    /** 切换着色器预设。 */
+    fun onShaderChanged(preset: ShaderPreset)
+
+    /** 选择并加载自定义 GLSL 片段着色器。 */
+    fun onLoadCustomShader()
 }

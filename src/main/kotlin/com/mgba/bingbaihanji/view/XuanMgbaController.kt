@@ -10,6 +10,7 @@ import com.mgba.bingbaihanji.core.save.SaveStateStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
 import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
+import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
@@ -67,6 +68,12 @@ class XuanMgbaController : MenuActions {
     /** 退出流程已经开始，避免关窗和菜单退出重复执行。 */
     private var exiting = false
 
+    /** 当前着色器预设。 */
+    private var shaderPreset = ShaderPreset.OFF
+
+    /** 用户自定义着色器文件（切到 CUSTOM 时使用）。 */
+    private var customShaderFile: File? = null
+
     init {
         rootPane.top = menuBar
         rootPane.bottom = statusBar
@@ -75,6 +82,16 @@ class XuanMgbaController : MenuActions {
             isPickOnBounds = false
         }
         rootPane.isPickOnBounds = false
+
+        // 着色器在 GL 线程编译，失败时切回 JavaFX 线程提示并恢复 Off
+        videoRenderer.onShaderError = { message ->
+            Platform.runLater {
+                statusBar.showMessage("着色器加载失败：$message", 5.0)
+                shaderPreset = ShaderPreset.OFF
+                menuBar.selectShaderPreset(ShaderPreset.OFF)
+                videoRenderer.setShaderPreset(ShaderPreset.OFF)
+            }
+        }
     }
 
     /**
@@ -248,6 +265,41 @@ class XuanMgbaController : MenuActions {
 
     override fun onToggleFastForward() {
         toggleFastForward()
+    }
+
+    // ── 着色器 ────────────────────────────────────────────────
+
+    override fun onShaderChanged(preset: ShaderPreset) {
+        if (preset == ShaderPreset.CUSTOM && customShaderFile == null) {
+            // 从没选过文件：直接走选择流程
+            onLoadCustomShader()
+            return
+        }
+        shaderPreset = preset
+        videoRenderer.setShaderPreset(preset, customShaderFile)
+        statusBar.showMessage("着色器：${preset.label()}")
+    }
+
+    override fun onLoadCustomShader() {
+        val file = FileChooser().apply {
+            title = "选择片段着色器"
+            extensionFilters.addAll(
+                FileChooser.ExtensionFilter("GLSL 着色器", "*.glsl", "*.frag", "*.fs", "*.txt"),
+                FileChooser.ExtensionFilter("所有文件", "*.*")
+            )
+        }.showOpenDialog(rootPane.scene?.window)
+
+        if (file == null) {
+            // 取消选择：把单选状态恢复到当前生效的预设
+            menuBar.selectShaderPreset(shaderPreset)
+            return
+        }
+
+        customShaderFile = file
+        shaderPreset = ShaderPreset.CUSTOM
+        videoRenderer.setShaderPreset(ShaderPreset.CUSTOM, file)
+        menuBar.selectShaderPreset(ShaderPreset.CUSTOM)
+        statusBar.showMessage("已加载着色器：${file.name}")
     }
 
     override fun onManageCheats() {

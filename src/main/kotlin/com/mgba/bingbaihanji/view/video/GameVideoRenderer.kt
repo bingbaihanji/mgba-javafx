@@ -1,22 +1,86 @@
 package com.mgba.bingbaihanji.view.video
 
+import com.bingbaihanji.xuan.gl.ShaderProgram
+import com.bingbaihanji.xuan.renderer.DynamicImage
 import com.bingbaihanji.xuan.renderer.Gc
+import com.mgba.bingbaihanji.core.emulation.FrameData
 import com.mgba.bingbaihanji.core.emulation.FrameSource
-import java.nio.ByteBuffer
+import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
+import com.mgba.bingbaihanji.platform.desktop.video.ShaderPresets
+import java.io.File
+import java.io.IOException
 import java.nio.ByteOrder
 import kotlin.math.min
 
 /**
- * 游戏视频渲染器：从 [FrameSource] 获取帧，转换像素格式后绘制到 GL 画布。
+ * 游戏视频渲染器：从 [FrameSource] 获取帧，上传为可更新纹理后绘制到 GL 画布。
  *
- * 支持 RGB565（mGBA 默认）和 XRGB8888 格式，等比 letterbox 缩放。
- * 视频绘制在 [topOffset] 到 [canvasHeight - bottomOffset] 的中心区域内，
- * 顶部/底部区域填充背景色（对应菜单栏和状态栏）。
+ * <p>帧数据直接以 RGB565（mGBA 默认）上传到 [DynamicImage]，
+ * 不会每帧新建像素数组或纹理；序列号相同的重复帧跳过上传。
+ *
+ * <p>视频绘制在 [topOffset] 到 [canvasHeight - bottomOffset] 的中心区域内等比
+ * letterbox，顶部/底部区域填充背景色（对应菜单栏和状态栏）。
+ *
+ * <p>线程约束：GL 资源（纹理、着色器）只在 [render] 里创建与释放；
+ * 设置项通过 volatile 字段从 JavaFX 线程交给 GL 线程。
  */
 class GameVideoRenderer {
 
+    // ── 跨线程设置（FX 线程写，GL 线程读）────────────────────
+
+    @Volatile
+    private var pendingPreset = ShaderPreset.OFF
+
+    @Volatile
+    private var pendingCustomPath: File? = null
+
+    @Volatile
+    private var disposeRequested = false
+
+    /** 着色器加载/编译失败回调（**GL 线程**调用，调用方自行切回 JavaFX 线程）。 */
+    @Volatile
+    var onShaderError: ((String) -> Unit)? = null
+
+    // ── GL 线程私有状态 ───────────────────────────────────────
+
+    private var activePreset = ShaderPreset.OFF
+    private var activeCustomPath: File? = null
+    private var shader: ShaderProgram? = null
+
+    private var image: DynamicImage? = null
+    private var imageWidth = 0
+    private var imageHeight = 0
+    private var imageFormat = -1
+    private var lastSequence = -1L
+
+    /** 非 RGB565 格式的转换缓冲，复用避免每帧分配。 */
+    private var pixelScratch = IntArray(0)
+
     private var lastWidth = 0
     private var lastHeight = 0
+
+    // ── 对外设置 ──────────────────────────────────────────────
+
+    /**
+     * 切换后处理预设（JavaFX 线程调用）。
+     *
+     * @param preset     预设
+     * @param customFile 自定义 GLSL 文件，仅 [ShaderPreset.CUSTOM] 时使用
+     */
+    fun setShaderPreset(preset: ShaderPreset, customFile: File? = null) {
+        pendingPreset = preset
+        pendingCustomPath = customFile
+    }
+
+    /** 请求释放 GL 资源（JavaFX 线程调用，真正的释放发生在下一帧渲染时）。 */
+    fun requestDispose() {
+        disposeRequested = true
+    }
+
+    /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
+    fun resolution(): Pair<Int, Int> = lastWidth to lastHeight
+
+    // ── 渲染 ──────────────────────────────────────────────────
 
     /**
      * 渲染一帧。
@@ -33,6 +97,12 @@ class GameVideoRenderer {
         canvasWidth: Float, canvasHeight: Float,
         topOffset: Float = 0f, bottomOffset: Float = 0f
     ) {
+        if (disposeRequested) {
+            disposeRequested = false
+            disposeResources(gc)
+        }
+        applyPendingShader(gc)
+
         // 偏移量夹在画布范围内：窗口很矮时若偏移量之和超过画布高度，
         // 中心区域会变成负数，drawImage 收到负尺寸后什么都不画（静默消失）
         val safeTop = topOffset.coerceIn(0f, canvasHeight)
@@ -40,12 +110,7 @@ class GameVideoRenderer {
         val contentY = safeTop
         val contentH = (canvasHeight - safeTop - safeBottom).coerceAtLeast(0f)
 
-        if (frameSource == null) {
-            drawBackground(gc, canvasWidth, canvasHeight)
-            return
-        }
-
-        val frame = frameSource.acquireFrame()
+        val frame = frameSource?.acquireFrame()
         if (frame == null) {
             drawBackground(gc, canvasWidth, canvasHeight)
             return
@@ -61,7 +126,6 @@ class GameVideoRenderer {
 
             if (contentH <= 0f) return
 
-            // 在中心区域内 letterbox
             val scale = min(canvasWidth / frame.width, contentH / frame.height)
             val dw = frame.width * scale
             val dh = frame.height * scale
@@ -72,14 +136,12 @@ class GameVideoRenderer {
             gc.fill = 0xFF000000.toInt()
             gc.fillRect(0f, contentY, canvasWidth, contentH)
 
-            drawFrame(gc, frame.buffer, frame.width, frame.height, frame.format, dx, dy, dw, dh)
+            val image = updateImage(gc, frame)
+            drawFrame(gc, image, frame.width, frame.height, dx, dy, dw, dh)
         } finally {
             frameSource.releaseFrame()
         }
     }
-
-    /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
-    fun resolution(): Pair<Int, Int> = lastWidth to lastHeight
 
     // ── 内部 ──────────────────────────────────────────────────
 
@@ -89,31 +151,161 @@ class GameVideoRenderer {
     }
 
     /**
-     * 将帧缓冲像素格式转换后绘制到目标矩形。
+     * 按需创建/更新纹理。
      *
-     * 格式码: 2=RGB565, 1=XRGB8888, 0=0RGB1555（按 RGB565 处理）。小端字节序。
+     * 尺寸或格式变化时重建纹理；序列号未变（重复帧）时跳过上传。
      */
-    private fun drawFrame(
-        gc: Gc, buffer: ByteBuffer, w: Int, h: Int, format: Int,
-        dx: Float, dy: Float, dw: Float, dh: Float
-    ) {
-        val pixels = IntArray(w * h)
-        buffer.order(ByteOrder.LITTLE_ENDIAN).rewind()
+    private fun updateImage(gc: Gc, frame: FrameData): DynamicImage {
+        val format = when (frame.format) {
+            1, 0 -> DynamicImage.PixelFormat.ARGB_8888
+            else -> DynamicImage.PixelFormat.RGB_565
+        }
 
-        when (format) {
-            // XRGB8888
-            1 -> for (i in pixels.indices) {
-                pixels[i] = buffer.int or (0xFF shl 24)
+        var current = image
+        if (current == null
+            || imageWidth != frame.width
+            || imageHeight != frame.height
+            || imageFormat != frame.format
+        ) {
+            current?.dispose()
+            current = gc.createDynamicImage(frame.width, frame.height, format)
+            image = current
+            imageWidth = frame.width
+            imageHeight = frame.height
+            imageFormat = frame.format
+            lastSequence = -1L
+        }
+
+        if (frame.sequence != lastSequence) {
+            if (format == DynamicImage.PixelFormat.RGB_565) {
+                current.update(frame.buffer)
+            } else {
+                current.update(convertToArgb(frame))
             }
-            // RGB565 / 0RGB1555
-            else -> for (i in pixels.indices) {
+            lastSequence = frame.sequence
+        }
+        return current
+    }
+
+    /**
+     * 把 XRGB8888 / 0RGB1555 帧转换成 0xAARRGGBB。
+     *
+     * 数据是小端字节序；重复帧的缓冲区内容可能被复用，所以每次按序列号转换。
+     */
+    private fun convertToArgb(frame: FrameData): IntArray {
+        val count = frame.width * frame.height
+        if (pixelScratch.size != count) {
+            pixelScratch = IntArray(count)
+        }
+        val buffer = frame.buffer.order(ByteOrder.LITTLE_ENDIAN).rewind()
+        if (frame.format == 1) {
+            // XRGB8888：高位 alpha 不可信，统一补不透明
+            for (i in 0 until count) {
+                pixelScratch[i] = buffer.int or (0xFF shl 24)
+            }
+        } else {
+            // 0RGB1555：5:5:5
+            for (i in 0 until count) {
                 val s = buffer.short.toInt() and 0xFFFF
-                val r = ((s shr 11) and 0x1F) shl 3
-                val g = ((s shr 5) and 0x3F) shl 2
+                val r = ((s shr 10) and 0x1F) shl 3
+                val g = ((s shr 5) and 0x1F) shl 3
                 val b = (s and 0x1F) shl 3
-                pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                pixelScratch[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             }
         }
-        gc.drawImage(pixels, w, h, dx, dy, dw, dh)
+        return pixelScratch
+    }
+
+    private fun drawFrame(
+        gc: Gc, image: DynamicImage, frameWidth: Int, frameHeight: Int,
+        dx: Float, dy: Float, dw: Float, dh: Float
+    ) {
+        val active = shader
+        if (active == null) {
+            gc.drawDynamicImage(image, dx, dy, dw, dh)
+            return
+        }
+        // uniform 是程序对象的状态：必须先 use() 再设，设置后即使稍后才提交也有效
+        active.use()
+        active.setUniform("uTexelSize", 1f / frameWidth, 1f / frameHeight)
+        gc.drawDynamicImage(image, dx, dy, dw, dh, active)
+    }
+
+    /**
+     * 处理预设切换：释放旧着色器，编译新着色器。
+     *
+     * 失败（文件读不到、GLSL 编译错误）时回退到关闭并通知 UI；
+     * 同时把 pendingPreset 改回 OFF，避免每帧重复尝试编译。
+     */
+    private fun applyPendingShader(gc: Gc) {
+        val requested = pendingPreset
+        val requestedPath = pendingCustomPath
+        val sameCustomFile = requested == ShaderPreset.CUSTOM
+                && activePreset == ShaderPreset.CUSTOM
+                && requestedPath?.absolutePath == activeCustomPath?.absolutePath
+        if (requested == activePreset && (requested != ShaderPreset.CUSTOM || sameCustomFile)) {
+            return
+        }
+
+        shader?.let { runCatching { it.dispose() } }
+        shader = null
+        activePreset = requested
+        activeCustomPath = if (requested == ShaderPreset.CUSTOM) requestedPath else null
+
+        if (requested == ShaderPreset.OFF) {
+            gc.setCustomShader(null)
+            return
+        }
+
+        val source: String?
+        if (requested == ShaderPreset.CUSTOM) {
+            val path = requestedPath
+            if (path == null) {
+                fallback(gc, "未选择自定义着色器文件")
+                return
+            }
+            source = try {
+                ShaderPresets.readCustomSource(path.toPath())
+            } catch (e: IOException) {
+                fallback(gc, "读取着色器失败：${e.message}")
+                return
+            }
+        } else {
+            source = ShaderPresets.fragmentSource(requested)
+        }
+
+        if (source == null) {
+            fallback(gc, "未知着色器预设")
+            return
+        }
+
+        try {
+            shader = gc.createImageShader(source)
+        } catch (e: RuntimeException) {
+            fallback(gc, e.message ?: "着色器编译失败")
+        }
+    }
+
+    private fun fallback(gc: Gc, message: String) {
+        activePreset = ShaderPreset.OFF
+        pendingPreset = ShaderPreset.OFF
+        shader = null
+        gc.setCustomShader(null)
+        System.err.println("[shader] " + message)
+        onShaderError?.invoke(message)
+    }
+
+    private fun disposeResources(gc: Gc) {
+        shader?.let { runCatching { it.dispose() } }
+        shader = null
+        image?.let { runCatching { it.dispose() } }
+        image = null
+        imageWidth = 0
+        imageHeight = 0
+        imageFormat = -1
+        lastSequence = -1L
+        activePreset = ShaderPreset.OFF
+        activeCustomPath = null
+        gc.setCustomShader(null)
     }
 }
