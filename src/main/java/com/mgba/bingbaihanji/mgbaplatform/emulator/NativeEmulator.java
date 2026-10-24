@@ -24,8 +24,26 @@ public final class NativeEmulator {
     private NativeEmulator() {
     }
 
-    /** 加载 mgba_frontend.dll：优先从已知相对路径加载，找不到再走 java.library.path。 */
+    /**
+     * 加载 mgba_frontend.dll。
+     *
+     * <p>加载顺序：
+     * <ol>
+     *   <li>系统属性 {@code mgba.native.dir}（fat jar 启动器解压到 jar 同目录后设置）；</li>
+     *   <li>开发目录里的已知相对路径；</li>
+     *   <li>{@code java.library.path}。</li>
+     * </ol>
+     */
     private static void loadLibrary() {
+        String nativeDir = System.getProperty("mgba.native.dir");
+        if (nativeDir != null && !nativeDir.isBlank()) {
+            File extracted = new File(nativeDir, "mgba_frontend.dll");
+            if (extracted.isFile()) {
+                System.load(extracted.getAbsolutePath());
+                return;
+            }
+        }
+
         String[] candidates = {
                 "build/native/windows-x64/dist/mgba_frontend.dll",
                 "native/dist/mgba_frontend.dll"

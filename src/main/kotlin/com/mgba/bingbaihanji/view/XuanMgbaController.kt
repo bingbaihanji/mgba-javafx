@@ -1033,13 +1033,25 @@ class XuanMgbaController : MenuActions {
 
 // ── 工具函数 ──────────────────────────────────────────────────
 
-/** 定位 mgba_libretro.dll。 */
-internal fun findCoreDll(): File =
-    listOf(
+/**
+ * 定位 mgba_libretro.dll。
+ *
+ * fat jar 启动器会把 DLL 解压到 jar 同目录并设置 `mgba.native.dir`；
+ * 开发环境则继续用仓库里的构建产物。
+ */
+internal fun findCoreDll(): File {
+    System.getProperty("mgba.native.dir")?.takeIf { it.isNotBlank() }?.let { directory ->
+        val extracted = File(directory, "mgba_libretro.dll")
+        if (extracted.isFile) {
+            return extracted
+        }
+    }
+    return listOf(
         File("build/native/windows-x64/dist/mgba_libretro.dll"),
         File("native/dist/mgba_libretro.dll")
     ).firstOrNull { it.exists() }
-        ?: error("找不到 mgba_libretro.dll，请先运行 scripts/build-native-windows.ps1")
+        ?: error("找不到 mgba_libretro.dll：打包运行时缺少解压文件，开发环境请先运行 scripts/build-native-windows.ps1")
+}
 
 /** 系统目录（BIOS 等），位于 %APPDATA%/bingbaihanji-mgba/system。 */
 internal fun systemDirectory(): File = AppPaths.systemDirectory().toFile()
