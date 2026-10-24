@@ -1,6 +1,7 @@
 package com.mgba.bingbaihanji.view
 
 import com.bingbaihanji.xuan.dsl.xuan
+import javafx.scene.image.Image
 import javafx.scene.input.KeyEvent
 
 /**
@@ -35,6 +36,8 @@ fun main() = xuan {
         scene.addEventFilter(KeyEvent.KEY_RELEASED) { e -> c.handleKeyReleased(e) }
 
         (scene.window as? javafx.stage.Stage)?.let { stage ->
+            // 窗口与任务栏图标
+            stage.icons.add(Image("/image/logo.png"))
             // 直接关窗时也要保存电池存档与自动槽位
             stage.setOnCloseRequest { c.onWindowClosing() }
             // 按 Esc 退出全屏时同样要恢复菜单栏与状态栏
