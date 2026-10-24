@@ -20,6 +20,17 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     private val volumeRadios = mutableMapOf<Int, RadioMenuItem>()
     private var debugCheckItem: CheckMenuItem? = null
 
+    /** 存档槽位菜单项，打开子菜单时刷新文字（显示保存时间/空槽）。 */
+    private val saveSlotItems = mutableListOf<MenuItem>()
+    private val loadSlotItems = mutableListOf<MenuItem>()
+
+    /**
+     * 槽位标签提供者，由控制器设置。
+     *
+     * @param slot 0 起的槽位号
+     */
+    var saveSlotLabel: ((Int) -> String)? = null
+
     init {
         menus.addAll(
             buildFileMenu(),
@@ -113,20 +124,26 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     private fun buildSaveStateMenu(): Menu {
         val saveSlots = Menu("保存到槽位").apply {
             for (slot in 1..SAVE_SLOT_COUNT) {
-                items.add(MenuItem("槽位 $slot").apply {
+                val item = MenuItem("槽位 $slot").apply {
                     // 传统映射：F1–F10 读取，Shift+F1–F10 保存
                     accelerator = KeyCombination.valueOf("Shift+F$slot")
                     setOnAction { actions.onSaveState(slot - 1) }
-                })
+                }
+                saveSlotItems.add(item)
+                items.add(item)
             }
+            setOnShowing { refreshSlotLabels() }
         }
         val loadSlots = Menu("读取槽位").apply {
             for (slot in 1..SAVE_SLOT_COUNT) {
-                items.add(MenuItem("槽位 $slot").apply {
+                val item = MenuItem("槽位 $slot").apply {
                     accelerator = KeyCombination.valueOf("F$slot")
                     setOnAction { actions.onLoadState(slot - 1) }
-                })
+                }
+                loadSlotItems.add(item)
+                items.add(item)
             }
+            setOnShowing { refreshSlotLabels() }
         }
         return Menu("即时存档(_S)").apply {
             items.addAll(
@@ -195,6 +212,13 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 shaderMenu
             )
         }
+    }
+
+    /** 刷新槽位文字：有存档时显示保存时间，空槽显示"（空）"。 */
+    private fun refreshSlotLabels() {
+        val provider = saveSlotLabel ?: return
+        saveSlotItems.forEachIndexed { index, item -> item.text = provider(index) }
+        loadSlotItems.forEachIndexed { index, item -> item.text = provider(index) }
     }
 
     // ── 设置 ──────────────────────────────────────────────────

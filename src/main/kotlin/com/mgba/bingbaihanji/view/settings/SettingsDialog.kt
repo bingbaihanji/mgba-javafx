@@ -53,6 +53,10 @@ class SettingsDialog(
         isSelected = current.stretchToFit
     }
 
+    private val linearCheck = CheckBox("线性过滤（关闭后像素边缘更锐利）").apply {
+        isSelected = current.linearFiltering
+    }
+
     private val autoSaveCheck = CheckBox("退出时保存到自动槽位").apply {
         isSelected = current.autoSaveOnExit
     }
@@ -90,12 +94,14 @@ class SettingsDialog(
             add(soundCheck, 1, 2)
             add(Label("显示"), 0, 3)
             add(stretchCheck, 1, 3)
-            add(Label("着色器"), 0, 4)
-            add(shaderBox, 1, 4)
-            add(Label("存档"), 0, 5)
-            add(autoSaveCheck, 1, 5)
-            add(Label("调试"), 0, 6)
-            add(debugCheck, 1, 6)
+            add(Label("过滤"), 0, 4)
+            add(linearCheck, 1, 4)
+            add(Label("着色器"), 0, 5)
+            add(shaderBox, 1, 5)
+            add(Label("存档"), 0, 6)
+            add(autoSaveCheck, 1, 6)
+            add(Label("调试"), 0, 7)
+            add(debugCheck, 1, 7)
             columnConstraints.addAll(
                 javafx.scene.layout.ColumnConstraints().apply { minWidth = 72.0 },
                 javafx.scene.layout.ColumnConstraints().apply {
@@ -122,6 +128,7 @@ class SettingsDialog(
         updated.soundVolume = volumeSlider.value.toInt()
         updated.enableSound = soundCheck.isSelected
         updated.stretchToFit = stretchCheck.isSelected
+        updated.linearFiltering = linearCheck.isSelected
         updated.autoSaveOnExit = autoSaveCheck.isSelected
         updated.showDebugOverlay = debugCheck.isSelected
         updated.shaderPreset = (shaderBox.value ?: ShaderPreset.OFF).name

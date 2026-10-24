@@ -20,6 +20,9 @@ public final class AppSettings {
     /** 是否拉伸填充（关闭时等比 letterbox）。 */
     public boolean stretchToFit = false;
 
+    /** 纹理线性过滤；关闭后放大时保持像素边缘清晰。 */
+    public boolean linearFiltering = true;
+
     /** 退出时保存到自动槽位。 */
     public boolean autoSaveOnExit = true;
 
@@ -43,6 +46,7 @@ public final class AppSettings {
         copy.soundVolume = soundVolume;
         copy.enableSound = enableSound;
         copy.stretchToFit = stretchToFit;
+        copy.linearFiltering = linearFiltering;
         copy.autoSaveOnExit = autoSaveOnExit;
         copy.showDebugOverlay = showDebugOverlay;
         copy.shaderPreset = shaderPreset;

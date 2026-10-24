@@ -42,6 +42,13 @@ class GameVideoRenderer {
     @Volatile
     private var stretchToFit = false
 
+    /** 纹理是否使用线性过滤（关闭后像素边缘更锐利）。 */
+    @Volatile
+    private var linearFiltering = true
+
+    /** 纹理当前实际应用的过滤方式，避免每帧重复设置。 */
+    private var appliedLinearFilter = true
+
     /** 着色器加载/编译失败回调（**GL 线程**调用，调用方自行切回 JavaFX 线程）。 */
     @Volatile
     var onShaderError: ((String) -> Unit)? = null
@@ -89,6 +96,15 @@ class GameVideoRenderer {
      */
     fun setStretchToFit(enabled: Boolean) {
         stretchToFit = enabled
+    }
+
+    /**
+     * 设置纹理过滤方式（JavaFX 线程调用）。
+     *
+     * @param enabled true = 线性过滤（平滑）；false = 最近邻（像素清晰）
+     */
+    fun setLinearFiltering(enabled: Boolean) {
+        linearFiltering = enabled
     }
 
     /** 当前帧的分辨率，无帧时返回 (0, 0)。 */
@@ -195,6 +211,14 @@ class GameVideoRenderer {
             imageHeight = frame.height
             imageFormat = frame.format
             lastSequence = -1L
+            // 新建的纹理统一显式设置一次过滤方式
+            current.setLinearFilter(linearFiltering)
+            appliedLinearFilter = linearFiltering
+        }
+
+        if (appliedLinearFilter != linearFiltering) {
+            current.setLinearFilter(linearFiltering)
+            appliedLinearFilter = linearFiltering
         }
 
         if (frame.sequence != lastSequence) {

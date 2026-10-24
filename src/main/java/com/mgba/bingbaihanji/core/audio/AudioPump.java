@@ -32,6 +32,12 @@ public final class AudioPump {
     /** 音频设备是否可用；打开失败时置 false，游戏照常运行但不输出声音。 */
     private volatile boolean audioAvailable = true;
 
+    /** 下一次循环是否丢弃积压（切换速度后避免先播放旧数据）。 */
+    private volatile boolean flushRequested;
+
+    /** 一次 flush 最多丢弃的批次数（16 × 1024 帧 = 音频环容量）。 */
+    private static final int DISCARD_BATCHES = 16;
+
     private Thread thread;
 
     /** 音频设备打开失败时的回调（在泵线程调用，实现方自行切回 UI 线程）。 */
@@ -96,6 +102,15 @@ public final class AudioPump {
         sink.resume();
     }
 
+    /**
+     * 请求丢弃音频环中的积压数据。
+     *
+     * <p>切换倍速后调用：快进期间缓冲区里堆的是旧音频，恢复原速时不该把它播出来。
+     */
+    public void flush() {
+        flushRequested = true;
+    }
+
     public boolean isRunning() {
         return running;
     }
@@ -115,6 +130,10 @@ public final class AudioPump {
         }
 
         while (running) {
+            if (flushRequested) {
+                flushRequested = false;
+                discardBacklog();
+            }
             if (paused) {
                 discardBacklog();
                 sleep(10);
@@ -143,9 +162,9 @@ public final class AudioPump {
         }
     }
 
-    /** 暂停时丢弃音频环中的积压数据。 */
+    /** 丢弃音频环中的积压数据（最多把整个环读空）。 */
     private void discardBacklog() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < DISCARD_BATCHES; i++) {
             pcmBuffer.clear();
             if (source.readAudio(pcmBuffer, READ_BATCH_FRAMES) <= 0) {
                 break;

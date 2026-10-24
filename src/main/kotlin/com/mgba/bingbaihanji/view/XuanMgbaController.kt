@@ -37,6 +37,9 @@ import javafx.scene.layout.StackPane
 import javafx.stage.FileChooser
 import javafx.util.Duration
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -140,6 +143,7 @@ class XuanMgbaController : MenuActions {
         speedMultiplier = settings.gameSpeed
         volume = settings.soundVolume / 100f
         videoRenderer.setStretchToFit(settings.stretchToFit)
+        videoRenderer.setLinearFiltering(settings.linearFiltering)
         menuBar.selectSpeed(settings.gameSpeed)
         menuBar.selectVolume(settings.soundVolume)
         menuBar.selectDebugOverlay(settings.showDebugOverlay)
@@ -153,6 +157,16 @@ class XuanMgbaController : MenuActions {
 
         if (settings.showDebugOverlay) {
             onToggleDebugOverlay(true)
+        }
+
+        // 存档子菜单每次打开时显示槽位状态（有存档则带保存时间）
+        menuBar.saveSlotLabel = { slot ->
+            val timestamp = saveSession?.stateTimestamp(slot) ?: 0L
+            if (timestamp <= 0L) {
+                "槽位 ${slot + 1}（空）"
+            } else {
+                "槽位 ${slot + 1} · ${SAVE_TIME_FORMAT.format(Instant.ofEpochMilli(timestamp))}"
+            }
         }
     }
 
@@ -352,6 +366,8 @@ class XuanMgbaController : MenuActions {
         fastForward = false
         loop?.setSpeedMultiplier(speed)
         applyEffectiveVolume()
+        // 切换速度后丢掉旧积压，避免恢复原速时先播一段快进期间缓冲的旧音频
+        audioPump?.flush()
         statusBar.setSpeed(speed)
         if (speed > 1.0) {
             statusBar.showMessage("${speed}x（快进时音频静音）", 2.5)
@@ -498,6 +514,7 @@ class XuanMgbaController : MenuActions {
         menuBar.selectVolume(updated.soundVolume)
 
         videoRenderer.setStretchToFit(updated.stretchToFit)
+        videoRenderer.setLinearFiltering(updated.linearFiltering)
 
         var preset = runCatching { ShaderPreset.valueOf(updated.shaderPreset) }
             .getOrDefault(ShaderPreset.OFF)
@@ -624,6 +641,7 @@ class XuanMgbaController : MenuActions {
         val newSpeed = if (fastForward) FAST_FORWARD_SPEED else speedMultiplier
         loop?.setSpeedMultiplier(newSpeed)
         applyEffectiveVolume()
+        audioPump?.flush()
         statusBar.setSpeed(newSpeed)
         statusBar.showMessage(if (fastForward) "快进：${FAST_FORWARD_SPEED}x" else "恢复 ${speedMultiplier}x")
     }
@@ -776,6 +794,10 @@ class XuanMgbaController : MenuActions {
 
         /** 快进倍速。 */
         private const val FAST_FORWARD_SPEED = 16.0
+
+        /** 存档槽位时间显示格式。 */
+        private val SAVE_TIME_FORMAT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
 
         /** GBA 按键映射。 */
         private val KEY_MAP = mapOf(
