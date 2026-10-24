@@ -33,8 +33,12 @@ class GameVideoRenderer {
         canvasWidth: Float, canvasHeight: Float,
         topOffset: Float = 0f, bottomOffset: Float = 0f
     ) {
-        val contentY = topOffset
-        val contentH = canvasHeight - topOffset - bottomOffset
+        // 偏移量夹在画布范围内：窗口很矮时若偏移量之和超过画布高度，
+        // 中心区域会变成负数，drawImage 收到负尺寸后什么都不画（静默消失）
+        val safeTop = topOffset.coerceIn(0f, canvasHeight)
+        val safeBottom = bottomOffset.coerceIn(0f, canvasHeight)
+        val contentY = safeTop
+        val contentH = (canvasHeight - safeTop - safeBottom).coerceAtLeast(0f)
 
         if (frameSource == null) {
             drawBackground(gc, canvasWidth, canvasHeight)

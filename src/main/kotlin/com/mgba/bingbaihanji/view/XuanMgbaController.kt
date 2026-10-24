@@ -52,19 +52,36 @@ class XuanMgbaController : MenuActions {
         rootPane.isPickOnBounds = false
     }
 
+    /**
+     * 把根容器挂到 xuan 的 overlay 上。
+     *
+     * overlay 是普通 [javafx.scene.layout.Pane]，而 Pane 只会按子节点的
+     * preferred size 摆放（不像 StackPane 那样拉伸填满）。所以必须把根容器
+     * 的 pref 尺寸绑定到 overlay 尺寸，否则 BorderPane 会缩成只有菜单栏
+     * 那么大，视频中心区域的高度直接变成 0。
+     */
+    fun attachToOverlay(overlay: javafx.scene.layout.Pane) {
+        rootPane.prefWidthProperty().bind(overlay.widthProperty())
+        rootPane.prefHeightProperty().bind(overlay.heightProperty())
+        overlay.children.add(rootPane)
+    }
+
     // ── 渲染（GL 线程调用）─────────────────────────────────────
 
-    fun render(gc: Gc, width: Float, height: Float) {
-        // 计算菜单栏和状态栏占的设备像素高度
-        val paneHeight = rootPane.height
-        if (paneHeight > 0) {
-            val scale = height / paneHeight.toFloat()
-            val topPx = ((rootPane.top?.layoutBounds?.height ?: 0.0) * scale).toFloat()
-            val bottomPx = ((rootPane.bottom?.layoutBounds?.height ?: 0.0) * scale).toFloat()
-            videoRenderer.render(gc, if (romLoaded) core else null, width, height, topPx, bottomPx)
-        } else {
-            videoRenderer.render(gc, if (romLoaded) core else null, width, height)
-        }
+    /**
+     * 渲染一帧。
+     *
+     * [Gc] 的坐标与 [Gc.width]/[Gc.height] 都是设备像素，而 JavaFX 的布局尺寸
+     * 是逻辑像素，两者在高 DPI 下差一个缩放系数。这里用根容器的实际宽度求比值，
+     * 把菜单栏/状态栏的逻辑高度换算成设备像素后交给渲染器避让。
+     */
+    fun render(gc: Gc) {
+        val canvasWidth = gc.width.toFloat()
+        val canvasHeight = gc.height.toFloat()
+        val scale = if (rootPane.width > 0) canvasWidth / rootPane.width.toFloat() else 1f
+        val topPx = (menuBar.layoutBounds.height * scale).toFloat()
+        val bottomPx = (statusBar.layoutBounds.height * scale).toFloat()
+        videoRenderer.render(gc, if (romLoaded) core else null, canvasWidth, canvasHeight, topPx, bottomPx)
     }
 
     // ── 输入（JavaFX 线程调用）─────────────────────────────────

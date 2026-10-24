@@ -18,7 +18,7 @@ fun main() = xuan {
 
     // 渲染（GL 线程）
     onRender {
-        controller?.render(this, width.toFloat(), height.toFloat())
+        controller?.render(this)
             ?: run {
                 fill = 0xFF1A1A2E.toInt()
                 fillRect(0f, 0f, width.toFloat(), height.toFloat())
@@ -30,7 +30,7 @@ fun main() = xuan {
         val c = XuanMgbaController()
         controller = c
 
-        overlay.children.add(c.rootPane)
+        c.attachToOverlay(overlay)
         scene.addEventFilter(KeyEvent.KEY_PRESSED) { e -> c.handleKeyPressed(e) }
         scene.addEventFilter(KeyEvent.KEY_RELEASED) { e -> c.handleKeyReleased(e) }
     }
