@@ -386,6 +386,11 @@ class XuanMgbaController : MenuActions {
                 FileChooser.ExtensionFilter("GLSL 着色器", "*.glsl", "*.frag", "*.fs", "*.txt"),
                 FileChooser.ExtensionFilter("所有文件", "*.*")
             )
+            // 默认打开上次选择的目录；没有就打开应用自己的着色器目录
+            val startDirectory = customShaderFile?.parentFile ?: AppPaths.shadersDirectory().toFile()
+            if (startDirectory.isDirectory) {
+                initialDirectory = startDirectory
+            }
         }.showOpenDialog(rootPane.scene?.window)
 
         if (file == null) {
