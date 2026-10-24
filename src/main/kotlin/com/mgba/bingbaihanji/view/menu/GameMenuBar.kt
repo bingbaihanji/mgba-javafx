@@ -56,6 +56,36 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 speedMenu,
                 MenuItem("切换快进").apply {
                     setOnAction { actions.onToggleFastForward() }
+                },
+                SeparatorMenuItem(),
+                buildSaveStateMenu()
+            )
+        }
+    }
+
+    /** 即时存档子菜单：10 个可见槽位 + 自动槽位。 */
+    private fun buildSaveStateMenu(): Menu {
+        val saveSlots = Menu("保存到槽位").apply {
+            for (slot in 1..SAVE_SLOT_COUNT) {
+                items.add(MenuItem("槽位 $slot").apply {
+                    setOnAction { actions.onSaveState(slot - 1) }
+                })
+            }
+        }
+        val loadSlots = Menu("读取槽位").apply {
+            for (slot in 1..SAVE_SLOT_COUNT) {
+                items.add(MenuItem("槽位 $slot").apply {
+                    setOnAction { actions.onLoadState(slot - 1) }
+                })
+            }
+        }
+        return Menu("即时存档(_S)").apply {
+            items.addAll(
+                saveSlots,
+                loadSlots,
+                SeparatorMenuItem(),
+                MenuItem("保存到自动槽位").apply {
+                    setOnAction { actions.onSaveAutoState() }
                 }
             )
         }
@@ -112,6 +142,9 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     }
 }
 
+/** UI 可见的即时存档槽位数（槽位 1–10）。 */
+private const val SAVE_SLOT_COUNT = 10
+
 /**
  * 菜单动作回调接口。由 [com.mgba.bingbaihanji.view.XuanMgbaController] 实现。
  */
@@ -125,4 +158,13 @@ interface MenuActions {
     fun onToggleMute()
     fun onVolumeChanged(volume: Float)
     fun onToggleFullscreen()
+
+    /** 保存即时存档；[slot] 为 0 起的槽位号。 */
+    fun onSaveState(slot: Int)
+
+    /** 读取即时存档；[slot] 为 0 起的槽位号。 */
+    fun onLoadState(slot: Int)
+
+    /** 保存到隐藏的自动槽位。 */
+    fun onSaveAutoState()
 }

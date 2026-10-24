@@ -3,7 +3,11 @@ package com.mgba.bingbaihanji.view
 import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
+import com.mgba.bingbaihanji.core.save.GameSaveSession
+import com.mgba.bingbaihanji.core.save.RomIdentity
+import com.mgba.bingbaihanji.core.save.SaveStateStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
+import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
@@ -17,6 +21,9 @@ import javafx.scene.input.KeyEvent
 import javafx.scene.layout.BorderPane
 import javafx.stage.FileChooser
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 /**
  * 组件组装与业务协调器。
@@ -41,6 +48,19 @@ class XuanMgbaController : MenuActions {
     private var paused = false
     private var speedMultiplier = 4.0
     private var volume = 1.0f
+
+    /** 当前 ROM 文件，复位时重新加载用。 */
+    private var currentRom: File? = null
+
+    /** 存档会话（电池存档 + 即时存档）。自动存档线程会读它，因此标记 volatile。 */
+    @Volatile
+    private var saveSession: GameSaveSession? = null
+
+    /** 周期保存电池存档的调度器。 */
+    private var autoSaveExecutor: ScheduledExecutorService? = null
+
+    /** 退出流程已经开始，避免关窗和菜单退出重复执行。 */
+    private var exiting = false
 
     init {
         rootPane.top = menuBar
@@ -115,8 +135,23 @@ class XuanMgbaController : MenuActions {
     }
 
     override fun onExit() {
+        if (exiting) return
+        exiting = true
+        saveBeforeExit()
         shutdown()
         Platform.exit()
+    }
+
+    /**
+     * 窗口关闭前的收尾（由场景的 onCloseRequest 调用）。
+     *
+     * <p>这里不调 [Platform.exit]：关窗流程本来就会结束应用，再调一次会重复触发关闭。
+     */
+    fun onWindowClosing() {
+        if (exiting) return
+        exiting = true
+        saveBeforeExit()
+        shutdown()
     }
 
     override fun onTogglePause() {
@@ -125,16 +160,78 @@ class XuanMgbaController : MenuActions {
         if (paused) {
             loop?.stop()
             audioPump?.pause()
+            saveBatteryQuietly()
+            statusBar.showMessage("已暂停")
         } else {
             loop?.start()
             audioPump?.resume()
+            statusBar.showMessage("已继续")
         }
     }
 
     override fun onReset() {
+        val c = core ?: return
+        val rom = currentRom ?: return
         if (!romLoaded) return
+
         loop?.stop()
+        saveBatteryQuietly()
+
+        // 真正的复位：卸载后重新加载同一 ROM，核心状态回到开机
+        if (c.unloadGame() != 0) {
+            statusBar.showMessage("复位失败：${c.lastError() ?: "核心错误"}")
+            loop?.start()
+            return
+        }
+        if (c.loadGame(rom.absolutePath) != 0) {
+            statusBar.showMessage("复位失败：${c.lastError() ?: "无法重新加载 ROM"}")
+            return
+        }
+        runCatching { saveSession?.loadBattery() }
+
         loop?.start()
+        statusBar.showMessage("已复位")
+    }
+
+    // ── 即时存档 ──────────────────────────────────────────────
+
+    override fun onSaveState(slot: Int) {
+        val session = saveSession
+        if (session == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val result = session.saveState(slot)
+        statusBar.showMessage(
+            if (result.ok()) "已保存到槽位 ${slot + 1}"
+            else "保存失败：${result.description()}"
+        )
+    }
+
+    override fun onLoadState(slot: Int) {
+        val session = saveSession
+        if (session == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val result = session.loadState(slot)
+        statusBar.showMessage(
+            if (result.ok()) "已读取槽位 ${slot + 1}"
+            else "读取失败：${result.description()}"
+        )
+    }
+
+    override fun onSaveAutoState() {
+        val session = saveSession
+        if (session == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val result = session.saveState(SaveStateStore.AUTO_SLOT)
+        statusBar.showMessage(
+            if (result.ok()) "已保存到自动槽位"
+            else "保存失败：${result.description()}"
+        )
     }
 
     override fun onSpeedChanged(speed: Double) {
@@ -191,6 +288,14 @@ class XuanMgbaController : MenuActions {
 
             val av = c.avInfo()
             core = c
+            currentRom = file
+
+            // 存档会话必须在 loadGame 之后建立：SRAM/RTC 的大小此时才确定
+            val identity = RomIdentity.of(file.toPath())
+            val session = GameSaveSession.open(c, identity, AppPaths.savesDirectory())
+            saveSession = session
+            val restoredBattery = session.loadBattery()
+            startAutoSave()
 
             // 音频
             val sink = SourceDataLineAudioSink(av.sampleRate)
@@ -217,6 +322,9 @@ class XuanMgbaController : MenuActions {
                 statusBar.setSpeed(speedMultiplier)
                 val (w, h) = videoRenderer.resolution()
                 statusBar.setResolution(w, h)
+                if (restoredBattery > 0) {
+                    statusBar.showMessage("已恢复电池存档")
+                }
             }
 
             Platform.runLater {
@@ -227,25 +335,70 @@ class XuanMgbaController : MenuActions {
         } catch (e: Exception) {
             showError("加载异常", e.message ?: e.javaClass.simpleName)
             e.printStackTrace()
+            shutdown()
         }
     }
 
+    /** 退出前保存：自动槽位 + 电池存档。 */
+    private fun saveBeforeExit() {
+        val session = saveSession ?: return
+        runCatching { session.saveState(SaveStateStore.AUTO_SLOT) }
+        runCatching { session.saveBattery() }
+    }
+
+    /** 周期保存电池存档：核心调用可能失败（比如正在卸载），静默忽略。 */
+    private fun saveBatteryQuietly() {
+        runCatching { saveSession?.saveBattery() }
+    }
+
+    /**
+     * 启动每 60 秒一次的电池存档。
+     *
+     * <p>只用单线程调度器：SRAM 写入本身很小，且核心调用已由
+     * {@link JniEmulatorCore} 内部锁串行化，不需要并发。
+     */
+    private fun startAutoSave() {
+        stopAutoSave()
+        val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "mgba-autosave").apply { isDaemon = true }
+        }
+        executor.scheduleAtFixedRate(
+            { saveBatteryQuietly() },
+            AUTO_SAVE_SECONDS, AUTO_SAVE_SECONDS, TimeUnit.SECONDS
+        )
+        autoSaveExecutor = executor
+    }
+
+    private fun stopAutoSave() {
+        autoSaveExecutor?.shutdownNow()
+        autoSaveExecutor = null
+    }
+
     private fun shutdown() {
-        loop?.stop()
-        audioPump?.stop()
-        audioSink?.close()
-        core?.unloadGame()
-        core?.close()
+        stopAutoSave()
+        runCatching { loop?.stop() }
+        runCatching { audioPump?.stop() }
+        runCatching { audioSink?.close() }
+        // 先写电池存档，再卸载核心
+        saveBatteryQuietly()
+        runCatching { core?.unloadGame() }
+        runCatching { core?.close() }
         loop = null
         audioPump = null
         audioSink = null
         core = null
+        saveSession = null
+        currentRom = null
         romLoaded = false
+        paused = false
     }
 
     companion object {
         /** 输入源 ID：键盘。 */
         private const val SOURCE_KEYBOARD = 1
+
+        /** 电池存档的自动保存间隔（秒）。 */
+        private const val AUTO_SAVE_SECONDS = 60L
 
         /** GBA 按键映射。 */
         private val KEY_MAP = mapOf(
@@ -281,8 +434,7 @@ internal fun findCoreDll(): File =
         ?: error("找不到 mgba_libretro.dll，请先运行 scripts/build-native-windows.ps1")
 
 /** 系统目录（BIOS 等），位于 %APPDATA%/bingbaihanji-mgba/system。 */
-internal fun systemDirectory(): File =
-    File(System.getenv("APPDATA") ?: ".", "bingbaihanji-mgba/system").apply { mkdirs() }
+internal fun systemDirectory(): File = AppPaths.systemDirectory().toFile()
 
 /** 弹出错误对话框（自动 dispatch 到 JavaFX 线程）。 */
 internal fun showError(title: String, message: String) {
