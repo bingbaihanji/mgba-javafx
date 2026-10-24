@@ -898,7 +898,7 @@ class XuanMgbaController : MenuActions {
 
             Platform.runLater {
                 (javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage)?.let {
-                    it.title = "mGBA Desktop - ${file.name}"
+                    it.title = "mGBA javafx - ${file.name}"
                 }
             }
         } catch (e: Exception) {

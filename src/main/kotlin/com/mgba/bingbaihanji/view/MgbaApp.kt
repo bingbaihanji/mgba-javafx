@@ -5,12 +5,12 @@ import javafx.scene.image.Image
 import javafx.scene.input.KeyEvent
 
 /**
- * mGBA Desktop 启动入口。
+ * mGBA javafx 启动入口。
  *
  * 仅负责配置窗口参数和启动 xuan 应用，业务逻辑委托给 [XuanMgbaController]。
  */
 fun main() = xuan {
-    title = "mGBA Desktop"
+    title = "mGBA javafx"
     width = 960.0
     height = 640.0
 

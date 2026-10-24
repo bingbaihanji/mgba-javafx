@@ -2,8 +2,13 @@ package com.mgba.bingbaihanji.view.menu
 
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.debug.DebugCategory
+import javafx.geometry.Insets
 import javafx.scene.control.*
+import javafx.scene.input.Clipboard
+import javafx.scene.input.DataFormat
 import javafx.scene.input.KeyCombination
+import javafx.scene.layout.VBox
+import java.net.URI
 
 /**
  * 游戏菜单栏：文件 / 模拟 / 音频 / 视频 / 帮助。
@@ -289,14 +294,49 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
 
     private fun buildHelpMenu() = Menu("帮助(_H)").apply {
         items.add(MenuItem("关于(_A)").apply {
-            setOnAction {
-                Alert(Alert.AlertType.INFORMATION).apply {
-                    title = "关于"
-                    headerText = "mGBA Desktop"
-                    contentText = "基于 xuan (JavaFX + OpenGL) 的 mGBA 桌面端\n核心: mGBA Libretro\n版本: 1.0-SNAPSHOT"
-                }.showAndWait()
-            }
+            setOnAction { showAboutDialog() }
         })
+    }
+
+    /** 关于对话框：版本信息与相关仓库链接。 */
+    private fun showAboutDialog() {
+        val links = listOf(
+            "本项目" to "https://github.com/bingbaihanji/mgba-javafx",
+            "mGBA" to "https://github.com/mgba-emu/mgba",
+            "mGBA Libretro" to "https://github.com/libretro/mgba"
+        )
+
+        val content = VBox(6.0).apply {
+            padding = Insets(12.0, 16.0, 8.0, 16.0)
+            children.addAll(
+                Label("基于 xuan (JavaFX + OpenGL) 的 mGBA 桌面端"),
+                Label("核心: mGBA Libretro"),
+                Label("版本: 1.0-SNAPSHOT"),
+                Separator(),
+                Label("相关仓库")
+            )
+            links.forEach { (name, url) ->
+                children += Hyperlink("$name  $url").apply {
+                    tooltip = Tooltip("在浏览器中打开 $url")
+                    setOnAction { openUrl(url) }
+                }
+            }
+        }
+
+        Alert(Alert.AlertType.INFORMATION).apply {
+            title = "关于"
+            headerText = "mGBA javafx"
+            dialogPane.content = content
+        }.showAndWait()
+    }
+
+    /** 用系统默认浏览器打开链接；打不开时至少复制到剪贴板，方便手动访问。 */
+    private fun openUrl(url: String) {
+        try {
+            java.awt.Desktop.getDesktop().browse(URI(url))
+        } catch (_: Exception) {
+            Clipboard.getSystemClipboard().setContent(mapOf(DataFormat.PLAIN_TEXT to url))
+        }
     }
 }
 
