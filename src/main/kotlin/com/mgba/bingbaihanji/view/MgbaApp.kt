@@ -206,11 +206,8 @@ fun main() = xuan {
 
         menuBar.menus.addAll(fileMenu, emuMenu, audioMenu, videoMenu, helpMenu)
 
-        // 菜单栏放顶部
-        val root = scene.root
-        if (root is javafx.scene.layout.Pane) {
-            root.children.add(0, VBox(menuBar))
-        }
+        // 菜单栏放 overlay 顶部（xuan 的 overlay 是叠在画布上的透明 Pane）
+        overlay.children.add(VBox(menuBar))
 
         // 键盘输入
         scene.addEventFilter(KeyEvent.KEY_PRESSED) { e ->
