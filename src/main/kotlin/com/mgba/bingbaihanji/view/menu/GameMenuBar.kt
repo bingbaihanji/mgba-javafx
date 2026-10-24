@@ -242,6 +242,9 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 MenuItem("播放设置(_P)...").apply {
                     setOnAction { actions.onOpenSettings() }
                 },
+                MenuItem("按键映射(_K)...").apply {
+                    setOnAction { actions.onOpenKeyMapping() }
+                },
                 MenuItem("核心选项(_O)...").apply {
                     setOnAction { actions.onOpenCoreOptions() }
                 },
@@ -312,6 +315,9 @@ interface MenuActions {
 
     /** 打开设置对话框。 */
     fun onOpenSettings()
+
+    /** 打开按键映射对话框。 */
+    fun onOpenKeyMapping()
 
     /** 打开核心选项对话框。 */
     fun onOpenCoreOptions()

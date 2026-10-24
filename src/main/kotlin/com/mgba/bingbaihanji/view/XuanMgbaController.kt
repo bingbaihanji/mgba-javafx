@@ -15,9 +15,11 @@ import com.mgba.bingbaihanji.core.settings.SettingsStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
 import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
+import com.mgba.bingbaihanji.platform.desktop.input.KeyMapping
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.debug.DebugOverlay
+import com.mgba.bingbaihanji.view.input.KeyMappingDialog
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
 import com.mgba.bingbaihanji.view.option.CoreOptionsDialog
@@ -97,6 +99,10 @@ class XuanMgbaController : MenuActions {
 
     /** 当前 ROM 的金手指服务。 */
     private var cheatService: CheatService? = null
+
+    /** 键盘映射（持久化）与它的反查表。 */
+    private var keyMapping = KeyMapping.load()
+    private var keyToButton: Map<KeyCode, GbaButton> = keyMapping.asKeyToButton()
 
     /** 周期保存电池存档的调度器。 */
     private var autoSaveExecutor: ScheduledExecutorService? = null
@@ -219,21 +225,23 @@ class XuanMgbaController : MenuActions {
         if (!pressedKeys.add(e.code)) {
             return
         }
-        if (e.code == KeyCode.SPACE && romLoaded) {
-            toggleFastForward()
+        val button = keyToButton[e.code]
+        if (button != null) {
+            core?.press(button, SOURCE_KEYBOARD)
             e.consume()
             return
         }
-        KEY_MAP[e.code]?.let { btn ->
-            core?.press(btn, SOURCE_KEYBOARD)
+        if (e.code == KeyCode.SPACE && romLoaded) {
+            toggleFastForward()
             e.consume()
         }
     }
 
     fun handleKeyReleased(e: KeyEvent) {
         pressedKeys.remove(e.code)
-        KEY_MAP[e.code]?.let { btn ->
-            core?.release(btn, SOURCE_KEYBOARD)
+        val button = keyToButton[e.code]
+        if (button != null) {
+            core?.release(button, SOURCE_KEYBOARD)
             e.consume()
         }
     }
@@ -542,6 +550,19 @@ class XuanMgbaController : MenuActions {
 
     // ── 设置 ──────────────────────────────────────────────────
 
+    override fun onOpenKeyMapping() {
+        KeyMappingDialog(rootPane.scene?.window, keyMapping) { updated ->
+            // 换映射前先松开所有按住的键，避免"旧键仍处于按下状态"
+            pressedKeys.clear()
+            core?.resetInput()
+            keyMapping = updated
+            keyToButton = updated.asKeyToButton()
+            runCatching { updated.save() }
+                .onFailure { statusBar.showMessage("保存按键映射失败：${it.message}") }
+            statusBar.showMessage("按键映射已更新")
+        }.show()
+    }
+
     override fun onOpenSettings() {
         SettingsDialog(rootPane.scene?.window, settings) { updated -> applySettings(updated) }.show()
     }
@@ -845,20 +866,6 @@ class XuanMgbaController : MenuActions {
         /** 存档槽位时间显示格式。 */
         private val SAVE_TIME_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
-
-        /** GBA 按键映射。 */
-        private val KEY_MAP = mapOf(
-            KeyCode.X to GbaButton.A,
-            KeyCode.Z to GbaButton.B,
-            KeyCode.A to GbaButton.L,
-            KeyCode.S to GbaButton.R,
-            KeyCode.ENTER to GbaButton.START,
-            KeyCode.BACK_SPACE to GbaButton.SELECT,
-            KeyCode.UP to GbaButton.UP,
-            KeyCode.DOWN to GbaButton.DOWN,
-            KeyCode.LEFT to GbaButton.LEFT,
-            KeyCode.RIGHT to GbaButton.RIGHT
-        )
 
         /**
          * ROM 文件扩展名过滤器。
