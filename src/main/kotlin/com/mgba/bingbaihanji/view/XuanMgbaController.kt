@@ -180,8 +180,9 @@ class XuanMgbaController : MenuActions {
         val canvasWidth = gc.width.toFloat()
         val canvasHeight = gc.height.toFloat()
         val scale = if (rootPane.width > 0) canvasWidth / rootPane.width.toFloat() else 1f
-        val topPx = (menuBar.layoutBounds.height * scale).toFloat()
-        val bottomPx = (statusBar.layoutBounds.height * scale).toFloat()
+        // 全屏时菜单栏/状态栏被隐藏（取消 managed），不应再为它们留空
+        val topPx = if (menuBar.isManaged) (menuBar.layoutBounds.height * scale).toFloat() else 0f
+        val bottomPx = if (statusBar.isManaged) (statusBar.layoutBounds.height * scale).toFloat() else 0f
         videoRenderer.render(gc, if (romLoaded) core else null, canvasWidth, canvasHeight, topPx, bottomPx)
     }
 
@@ -261,7 +262,9 @@ class XuanMgbaController : MenuActions {
         // 真正的复位：卸载后重新加载同一 ROM，核心状态回到开机
         if (c.unloadGame() != 0) {
             statusBar.showMessage("复位失败：${c.lastError() ?: "核心错误"}")
-            loop?.start()
+            if (!paused) {
+                loop?.start()
+            }
             return
         }
         if (c.loadGame(rom.absolutePath) != 0) {
@@ -272,7 +275,10 @@ class XuanMgbaController : MenuActions {
         cheatService?.apply()
         CoreOptionService(c).apply(savedCoreOptions)
 
-        loop?.start()
+        // 暂停状态下复位后仍保持暂停，不要偷偷把模拟跑起来
+        if (!paused) {
+            loop?.start()
+        }
         statusBar.showMessage("已复位")
     }
 
@@ -457,10 +463,15 @@ class XuanMgbaController : MenuActions {
 
         videoRenderer.setStretchToFit(updated.stretchToFit)
 
-        val preset = runCatching { ShaderPreset.valueOf(updated.shaderPreset) }
+        var preset = runCatching { ShaderPreset.valueOf(updated.shaderPreset) }
             .getOrDefault(ShaderPreset.OFF)
-        shaderPreset = preset
         updated.customShaderPath.takeIf { it.isNotBlank() }?.let { customShaderFile = File(it) }
+        if (preset == ShaderPreset.CUSTOM && customShaderFile == null) {
+            // 选了自定义却没有文件：不要留一个永远编译失败的预设
+            preset = ShaderPreset.OFF
+            updated.shaderPreset = ShaderPreset.OFF.name
+        }
+        shaderPreset = preset
         videoRenderer.setShaderPreset(preset, customShaderFile)
         menuBar.selectShaderPreset(preset)
 
@@ -529,9 +540,24 @@ class XuanMgbaController : MenuActions {
     }
 
     override fun onToggleFullscreen() {
-        (javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage)?.let {
-            it.isFullScreen = !it.isFullScreen
-        }
+        val stage = javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage ?: return
+        stage.isFullScreen = !stage.isFullScreen
+        setFullscreenLayout(stage.isFullScreen)
+    }
+
+    /**
+     * 切换全屏时要同时收起/恢复菜单栏与状态栏。
+     *
+     * <p>用 {@code managed=false} 而不只是隐藏：只有这样才能让 BorderPane
+     * 把整块区域让给中心内容，视频也才会铺满整个窗口。
+     *
+     * @param fullscreen 是否处于全屏
+     */
+    fun setFullscreenLayout(fullscreen: Boolean) {
+        menuBar.isVisible = !fullscreen
+        menuBar.isManaged = !fullscreen
+        statusBar.isVisible = !fullscreen
+        statusBar.isManaged = !fullscreen
     }
 
     // ── 私有 ──────────────────────────────────────────────────

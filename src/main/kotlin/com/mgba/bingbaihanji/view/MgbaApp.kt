@@ -34,7 +34,13 @@ fun main() = xuan {
         scene.addEventFilter(KeyEvent.KEY_PRESSED) { e -> c.handleKeyPressed(e) }
         scene.addEventFilter(KeyEvent.KEY_RELEASED) { e -> c.handleKeyReleased(e) }
 
-        // 直接关窗时也要保存电池存档与自动槽位
-        (scene.window as? javafx.stage.Stage)?.setOnCloseRequest { c.onWindowClosing() }
+        (scene.window as? javafx.stage.Stage)?.let { stage ->
+            // 直接关窗时也要保存电池存档与自动槽位
+            stage.setOnCloseRequest { c.onWindowClosing() }
+            // 按 Esc 退出全屏时同样要恢复菜单栏与状态栏
+            stage.fullScreenProperty().addListener { _, _, fullscreen ->
+                c.setFullscreenLayout(fullscreen)
+            }
+        }
     }
 }
