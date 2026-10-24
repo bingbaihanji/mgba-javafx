@@ -737,7 +737,9 @@ class XuanMgbaController : MenuActions {
 
             // 存档会话必须在 loadGame 之后建立：SRAM/RTC 的大小此时才确定
             val identity = RomIdentity.of(file.toPath())
-            val session = GameSaveSession.open(c, identity, AppPaths.savesDirectory())
+            val session = GameSaveSession.open(
+                c, identity, AppPaths.savesDirectory(), file.toPath()
+            )
             saveSession = session
             val restoredBattery = session.loadBattery()
             startAutoSave()

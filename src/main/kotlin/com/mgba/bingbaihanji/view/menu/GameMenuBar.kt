@@ -269,8 +269,8 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
     }
 }
 
-/** UI 可见的即时存档槽位数（槽位 1–10）。 */
-private const val SAVE_SLOT_COUNT = 10
+/** UI 可见的即时存档槽位数（与原版 mGBA 的 1–9 槽一致）。 */
+private const val SAVE_SLOT_COUNT = 9
 
 /**
  * 菜单动作回调接口。由 [com.mgba.bingbaihanji.view.XuanMgbaController] 实现。

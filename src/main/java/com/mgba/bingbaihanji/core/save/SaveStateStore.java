@@ -6,15 +6,16 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
 /**
- * 即时存档槽位的文件管理。
+ * 即时存档槽位的文件管理（应用目录里的旧版 MGST 格式）。
  *
- * <p>槽位 1–10 对应 UI 上的 10 个槽，{@link #AUTO_SLOT} 是退出时自动保存的隐藏槽。
- * 文件名为 {@code slotN.state}，与 SRAM/RTC 放在同一个游戏目录下。
+ * <p>UI 可见槽位 1–9 对应原版 mGBA 的 {@code .ss1}–{@code .ss9}（由
+ * {@link GameSaveSession} 写到 ROM 同目录）；这里的 {@code slotN.state} 只用于
+ * 自动槽位与旧版存档的读取兼容。
  */
 public final class SaveStateStore {
 
-    /** UI 可见槽位数。 */
-    public static final int SLOT_COUNT = 10;
+    /** UI 可见槽位数（与原版 mGBA 的快捷存档槽 1–9 对齐）。 */
+    public static final int SLOT_COUNT = 9;
 
     /** 自动存档槽（UI 不展示）。 */
     public static final int AUTO_SLOT = 10;
