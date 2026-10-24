@@ -6,11 +6,15 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * 音频消费线程：从 AudioSource 的音频环读取 PCM 帧，写入 AudioSink。
- * 线程名 mgba-audio。
+ * 音频消费线程：从 {@link AudioSource} 的音频环读取 PCM 帧，写入 {@link AudioSink}。
+ *
+ * <p>线程模型：内部启动 daemon 线程 {@code mgba-audio}。
+ * 暂停时丢弃积压数据（避免恢复后播旧音频）。
+ * 音频环空闲时短暂休眠（2ms）等待新数据。
  */
 public final class AudioPump {
 
+    /** 每次从音频环读取的帧数（1 帧 = 4 字节立体声 16-bit）。 */
     private static final int READ_BATCH_FRAMES = 1024;
 
     private final AudioSource source;
@@ -29,6 +33,7 @@ public final class AudioPump {
         this.pcmArray = new short[READ_BATCH_FRAMES * 2];
     }
 
+    /** 启动音频泵。已在运行时为空操作。 */
     public void start() {
         if (running) return;
         running = true;
@@ -39,6 +44,7 @@ public final class AudioPump {
         thread.start();
     }
 
+    /** 停止音频泵并等待线程退出。 */
     public void stop() {
         running = false;
         if (thread != null) {
@@ -51,11 +57,13 @@ public final class AudioPump {
         }
     }
 
+    /** 暂停播放并丢弃积压数据。 */
     public void pause() {
         paused = true;
         sink.pause();
     }
 
+    /** 恢复播放。 */
     public void resume() {
         paused = false;
         sink.resume();
@@ -65,36 +73,49 @@ public final class AudioPump {
         return running;
     }
 
+    // ── 内部 ──────────────────────────────────────────────────
+
     private void pumpLoop() {
         while (running) {
             if (paused) {
-                // 暂停时丢弃积压
                 discardBacklog();
-                try { Thread.sleep(10); } catch (InterruptedException e) { return; }
+                sleep(10);
                 continue;
             }
 
             pcmBuffer.clear();
             int frames = source.readAudio(pcmBuffer, READ_BATCH_FRAMES);
             if (frames <= 0) {
-                try { Thread.sleep(2); } catch (InterruptedException e) { return; }
+                sleep(2);
                 continue;
             }
 
-            // copy direct buffer to short[]
-            pcmBuffer.rewind();
-            for (int i = 0; i < frames * 2; i++) {
-                pcmArray[i] = pcmBuffer.getShort();
-            }
+            copyToShortArray(frames);
             sink.write(pcmArray, frames);
         }
     }
 
+    /** 将 direct buffer 的 PCM 数据复制到 short[]（供 AudioSink 写入）。 */
+    private void copyToShortArray(int frames) {
+        pcmBuffer.rewind();
+        for (int i = 0; i < frames * 2; i++) {
+            pcmArray[i] = pcmBuffer.getShort();
+        }
+    }
+
+    /** 暂停时丢弃音频环中的积压数据。 */
     private void discardBacklog() {
         for (int i = 0; i < 4; i++) {
             pcmBuffer.clear();
-            int n = source.readAudio(pcmBuffer, READ_BATCH_FRAMES);
-            if (n <= 0) break;
+            if (source.readAudio(pcmBuffer, READ_BATCH_FRAMES) <= 0) break;
+        }
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

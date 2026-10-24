@@ -1,9 +1,12 @@
 package com.mgba.bingbaihanji.view
 
-import com.bingbaihanji.xuan.dsl.xuan
+import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
+import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
+import com.bingbaihanji.xuan.dsl.xuan
+import com.bingbaihanji.xuan.renderer.Gc
 import javafx.application.Platform
 import javafx.scene.control.*
 import javafx.scene.input.KeyCode
@@ -12,76 +15,102 @@ import javafx.scene.input.KeyEvent
 import javafx.scene.layout.VBox
 import javafx.stage.FileChooser
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.min
+
+// ── 按键映射 ──────────────────────────────────────────────────
+
+private val KEY_MAP = mapOf(
+    KeyCode.X to GbaButton.A,
+    KeyCode.Z to GbaButton.B,
+    KeyCode.A to GbaButton.L,
+    KeyCode.S to GbaButton.R,
+    KeyCode.ENTER to GbaButton.START,
+    KeyCode.BACK_SPACE to GbaButton.SELECT,
+    KeyCode.UP to GbaButton.UP,
+    KeyCode.DOWN to GbaButton.DOWN,
+    KeyCode.LEFT to GbaButton.LEFT,
+    KeyCode.RIGHT to GbaButton.RIGHT
+)
+
+private val ROM_FILTERS = listOf(
+    FileChooser.ExtensionFilter("GB/GBA ROM", "*.gba", "*.gbc", "*.gb", "*.agb"),
+    FileChooser.ExtensionFilter("ZIP 压缩包", "*.zip"),
+    FileChooser.ExtensionFilter("所有文件", "*.*")
+)
+
+// ── 主入口 ────────────────────────────────────────────────────
 
 fun main() = xuan {
     title = "mGBA Desktop"
     width = 960.0
     height = 640.0
 
+    // ── 可变状态 ────────────────────────────────────────────
     var core: JniEmulatorCore? = null
     var loop: EmulationLoop? = null
-    var gameWidth = 240
-    var gameHeight = 160
+    var audioPump: AudioPump? = null
+    var audioSink: SourceDataLineAudioSink? = null
     var romLoaded = false
     var paused = false
     var speedMultiplier = 4.0
 
-    val keyMap = mapOf(
-        KeyCode.X to GbaButton.A,
-        KeyCode.Z to GbaButton.B,
-        KeyCode.A to GbaButton.L,
-        KeyCode.S to GbaButton.R,
-        KeyCode.ENTER to GbaButton.START,
-        KeyCode.BACK_SPACE to GbaButton.SELECT,
-        KeyCode.UP to GbaButton.UP,
-        KeyCode.DOWN to GbaButton.DOWN,
-        KeyCode.LEFT to GbaButton.LEFT,
-        KeyCode.RIGHT to GbaButton.RIGHT
-    )
-
+    // ── ROM 加载 ────────────────────────────────────────────
     fun loadRom(file: File) {
-        if (romLoaded) {
-            loop?.stop()
-            core?.unloadGame()
-            core?.close()
-        }
+        // 释放旧的模拟器资源
+        loop?.stop()
+        audioPump?.stop()
+        audioSink?.close()
+        core?.unloadGame()
+        core?.close()
+
         try {
             val c = JniEmulatorCore()
-            val coreDll = findCoreDll()
-            val systemDir = systemDirectory()
-
-            if (c.initialize(coreDll.absolutePath, systemDir.absolutePath) != 0) {
-                showError("核心初始化失败", c.lastError() ?: "未知错误")
+            val initResult = c.initialize(findCoreDll().absolutePath, systemDirectory().absolutePath)
+            if (initResult != 0) {
+                showError("核心初始化失败", c.lastError() ?: "错误码 $initResult")
                 return
             }
-            if (c.loadGame(file.absolutePath) != 0) {
-                showError("加载 ROM 失败", c.lastError() ?: "未知错误")
+
+            val loadResult = c.loadGame(file.absolutePath)
+            if (loadResult != 0) {
+                showError("加载 ROM 失败", c.lastError() ?: "错误码 $loadResult")
                 return
             }
 
             val av = c.avInfo()
             core = c
-            val l = EmulationLoop(c)
-            l.setTargetFps(av.fps)
-            l.setSpeedMultiplier(speedMultiplier)
-            loop = l
-            l.start()
+
+            // 音频
+            val sink = SourceDataLineAudioSink(av.sampleRate)
+            audioSink = sink
+            val pump = AudioPump(c, sink)
+            audioPump = pump
+            pump.start()
+
+            // 帧循环
+            val emuLoop = EmulationLoop(c)
+            emuLoop.setTargetFps(av.fps)
+            emuLoop.setSpeedMultiplier(speedMultiplier)
+            loop = emuLoop
+            emuLoop.start()
+
             romLoaded = true
             paused = false
 
             Platform.runLater {
-                javafx.stage.Stage.getWindows().firstOrNull()?.let {
-                    if (it is javafx.stage.Stage) it.title = "mGBA Desktop - ${file.name}"
+                (javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage)?.let {
+                    it.title = "mGBA Desktop - ${file.name}"
                 }
             }
-            println("ROM 已加载: ${file.name}")
         } catch (e: Exception) {
-            showError("加载异常", e.message ?: "未知错误")
+            showError("加载异常", e.message ?: e.javaClass.simpleName)
             e.printStackTrace()
         }
     }
 
+    // ── 渲染 ────────────────────────────────────────────────
     onRender {
         val c = core
         if (c == null || !romLoaded) {
@@ -89,50 +118,50 @@ fun main() = xuan {
             fillRect(0f, 0f, width.toFloat(), height.toFloat())
             return@onRender
         }
-        val frame = c.acquireFrame()
-        if (frame != null) {
-            gameWidth = frame.width
-            gameHeight = frame.height
-            val scale = min(width / gameWidth.toFloat(), height / gameHeight.toFloat())
-            val dw = gameWidth * scale
-            val dh = gameHeight * scale
+
+        val frame = c.acquireFrame() ?: return@onRender
+        try {
+            val scale = min(width / frame.width.toFloat(), height / frame.height.toFloat())
+            val dw = frame.width * scale
+            val dh = frame.height * scale
             val dx = (width - dw) / 2f
             val dy = (height - dh) / 2f
+
             fill = 0xFF000000.toInt()
             fillRect(0f, 0f, width.toFloat(), height.toFloat())
             drawFrame(frame.buffer, frame.width, frame.height, frame.format, dx, dy, dw, dh)
+        } finally {
             c.releaseFrame()
         }
     }
 
+    // ── 场景（菜单 + 输入）──────────────────────────────────────
     onScene { scene ->
-        // 菜单栏（toolkit 已就绪）
         val menuBar = MenuBar()
 
+        // 文件
         val fileMenu = Menu("文件(_F)")
         fileMenu.items.addAll(
             MenuItem("打开 ROM(_O)").apply {
                 accelerator = KeyCombination.valueOf("Shortcut+O")
                 setOnAction {
-                    val file = FileChooser().apply {
+                    FileChooser().apply {
                         title = "选择 ROM"
-                        extensionFilters.addAll(
-                            FileChooser.ExtensionFilter("GB/GBA ROM", "*.gba", "*.gbc", "*.gb", "*.agb"),
-                            FileChooser.ExtensionFilter("ZIP 压缩包", "*.zip"),
-                            FileChooser.ExtensionFilter("所有文件", "*.*")
-                        )
-                    }.showOpenDialog(null)
-                    if (file != null && file.exists()) loadRom(file)
+                        extensionFilters.addAll(ROM_FILTERS)
+                    }.showOpenDialog(null)?.let { loadRom(it) }
                 }
             },
             SeparatorMenuItem(),
             MenuItem("退出(_X)").apply {
                 accelerator = KeyCombination.valueOf("Shortcut+Q")
-                setOnAction { loop?.stop(); core?.close(); Platform.exit() }
+                setOnAction {
+                    loop?.stop(); audioPump?.stop(); audioSink?.close(); core?.close()
+                    Platform.exit()
+                }
             }
         )
 
-        val emuMenu = Menu("模拟(_E)")
+        // 模拟
         val speedGroup = ToggleGroup()
         val speedMenu = Menu("速度(_S)")
         for (speed in listOf(0.5, 1.0, 2.0, 4.0, 8.0, 16.0)) {
@@ -142,12 +171,14 @@ fun main() = xuan {
                 setOnAction { speedMultiplier = speed; loop?.setSpeedMultiplier(speed) }
             })
         }
+        val emuMenu = Menu("模拟(_E)")
         emuMenu.items.addAll(
             MenuItem("暂停/继续(_P)").apply {
                 setOnAction {
                     if (!romLoaded) return@setOnAction
                     paused = !paused
-                    if (paused) loop?.stop() else loop?.start()
+                    if (paused) { loop?.stop(); audioPump?.pause() }
+                    else { loop?.start(); audioPump?.resume() }
                 }
             },
             MenuItem("复位(_R)").apply {
@@ -159,40 +190,46 @@ fun main() = xuan {
             MenuItem("切换快进").apply {
                 setOnAction {
                     if (!romLoaded) return@setOnAction
-                    val cur = loop?.getSpeedMultiplier() ?: 1.0
+                    val cur = loop?.speedMultiplier ?: 1.0
                     loop?.setSpeedMultiplier(if (cur > 1.0) 1.0 else speedMultiplier)
                 }
             }
         )
 
-        val audioMenu = Menu("音频(_A)")
+        // 音频
         val volumeGroup = ToggleGroup()
         val volumeMenu = Menu("音量(_V)")
         for (pct in listOf(25, 50, 75, 100)) {
             volumeMenu.items.add(RadioMenuItem("${pct}%").apply {
                 toggleGroup = volumeGroup
                 isSelected = pct == 100
+                setOnAction { audioSink?.setVolume(pct / 100f) }
             })
         }
+        val audioMenu = Menu("音频(_A)")
         audioMenu.items.addAll(
-            MenuItem("静音(_M)").apply { accelerator = KeyCombination.valueOf("M") },
+            MenuItem("静音(_M)").apply {
+                accelerator = KeyCombination.valueOf("M")
+                setOnAction { audioSink?.setVolume(0f) }
+            },
             SeparatorMenuItem(),
             volumeMenu
         )
 
+        // 视频
         val videoMenu = Menu("视频(_V)")
         videoMenu.items.addAll(
-            CheckMenuItem("拉伸填充"),
-            SeparatorMenuItem(),
             MenuItem("全屏(_F)").apply {
                 accelerator = KeyCombination.valueOf("F11")
                 setOnAction {
-                    val stage = javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage
-                    stage?.isFullScreen = !(stage?.isFullScreen ?: false)
+                    (javafx.stage.Stage.getWindows().firstOrNull() as? javafx.stage.Stage)?.let {
+                        it.isFullScreen = !it.isFullScreen
+                    }
                 }
             }
         )
 
+        // 帮助
         val helpMenu = Menu("帮助(_H)")
         helpMenu.items.add(MenuItem("关于(_A)").apply {
             setOnAction {
@@ -205,67 +242,83 @@ fun main() = xuan {
         })
 
         menuBar.menus.addAll(fileMenu, emuMenu, audioMenu, videoMenu, helpMenu)
-
-        // 菜单栏放 overlay 顶部（xuan 的 overlay 是叠在画布上的透明 Pane）
         overlay.children.add(VBox(menuBar))
 
         // 键盘输入
         scene.addEventFilter(KeyEvent.KEY_PRESSED) { e ->
             if (e.code == KeyCode.SPACE && romLoaded) {
-                val cur = loop?.getSpeedMultiplier() ?: 1.0
+                val cur = loop?.speedMultiplier ?: 1.0
                 loop?.setSpeedMultiplier(if (cur > 1.0) 1.0 else speedMultiplier)
-                e.consume(); return@addEventFilter
+                e.consume()
+                return@addEventFilter
             }
-            keyMap[e.code]?.let { btn ->
-                if (core != null) { core?.press(btn, 1); e.consume() }
+            KEY_MAP[e.code]?.let { btn ->
+                core?.press(btn, 1)
+                e.consume()
             }
         }
         scene.addEventFilter(KeyEvent.KEY_RELEASED) { e ->
-            keyMap[e.code]?.let { btn ->
-                if (core != null) { core?.release(btn, 1); e.consume() }
+            KEY_MAP[e.code]?.let { btn ->
+                core?.release(btn, 1)
+                e.consume()
             }
         }
     }
 }
 
-private fun findCoreDll(): File {
-    return listOf(
-        File("build/native/windows-x64/dist/mgba_libretro.dll"),
-        File("native/dist/mgba_libretro.dll")
-    ).firstOrNull { it.exists() } ?: error("找不到 mgba_libretro.dll")
-}
+// ── 帧格式转换 ────────────────────────────────────────────────
 
-private fun systemDirectory(): File {
-    val dir = File(System.getenv("APPDATA") ?: ".", "bingbaihanji-mgba/system")
-    dir.mkdirs()
-    return dir
-}
-
-private fun showError(title: String, message: String) {
-    Platform.runLater {
-        Alert(Alert.AlertType.ERROR).apply { this.title = title; headerText = title; contentText = message }.showAndWait()
-    }
-}
-
-private fun com.bingbaihanji.xuan.renderer.Gc.drawFrame(
-    buffer: java.nio.ByteBuffer, w: Int, h: Int, format: Int,
+/**
+ * 将模拟器帧缓冲绘制到目标矩形（letterbox）。
+ *
+ * 格式码: 2=RGB565, 1=XRGB8888, 0=0RGB1555（按 RGB565 处理）。
+ * 数据为小端字节序。
+ */
+private fun Gc.drawFrame(
+    buffer: ByteBuffer, width: Int, height: Int, format: Int,
     dx: Float, dy: Float, dw: Float, dh: Float
 ) {
-    val pixels = IntArray(w * h)
-    buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-    buffer.rewind()
+    val pixels = IntArray(width * height)
+    buffer.order(ByteOrder.LITTLE_ENDIAN).rewind()
+
     when (format) {
-        2 -> for (i in 0 until w * h) {
-            val s = buffer.short.toInt() and 0xFFFF
-            val r = ((s shr 11) and 0x1F) shl 3; val g = ((s shr 5) and 0x3F) shl 2; val b = (s and 0x1F) shl 3
-            pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        // XRGB8888
+        1 -> for (i in pixels.indices) {
+            pixels[i] = buffer.int or (0xFF shl 24)
         }
-        1 -> for (i in 0 until w * h) { pixels[i] = buffer.int or (0xFF shl 24) }
-        else -> for (i in 0 until w * h) {
+        // RGB565 / 0RGB1555
+        else -> for (i in pixels.indices) {
             val s = buffer.short.toInt() and 0xFFFF
-            val r = ((s shr 10) and 0x1F) shl 3; val g = ((s shr 5) and 0x1F) shl 3; val b = (s and 0x1F) shl 3
+            val r = ((s shr 11) and 0x1F) shl 3
+            val g = ((s shr 5) and 0x3F) shl 2
+            val b = (s and 0x1F) shl 3
             pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
     }
-    drawImage(pixels, w, h, dx, dy, dw, dh)
+    drawImage(pixels, width, height, dx, dy, dw, dh)
+}
+
+// ── 工具函数 ──────────────────────────────────────────────────
+
+/** 定位 mgba_libretro.dll。 */
+private fun findCoreDll(): File =
+    listOf(
+        File("build/native/windows-x64/dist/mgba_libretro.dll"),
+        File("native/dist/mgba_libretro.dll")
+    ).firstOrNull { it.exists() }
+        ?: error("找不到 mgba_libretro.dll，请先运行 scripts/build-native-windows.ps1")
+
+/** 系统目录（BIOS 等），位于 %APPDATA%/bingbaihanji-mgba/system。 */
+private fun systemDirectory(): File =
+    File(System.getenv("APPDATA") ?: ".", "bingbaihanji-mgba/system").apply { mkdirs() }
+
+/** 弹出错误对话框（必须在 JavaFX 线程调用，此处自动 dispatch）。 */
+private fun showError(title: String, message: String) {
+    Platform.runLater {
+        Alert(Alert.AlertType.ERROR).apply {
+            this.title = title
+            headerText = title
+            contentText = message
+        }.showAndWait()
+    }
 }

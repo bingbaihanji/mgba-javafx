@@ -3,24 +3,29 @@ package com.mgba.bingbaihanji.core.emulation;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 帧循环：按核心报告的 FPS × 倍速节奏调用 core.runOnce()。
- * 绝对时间调度防睡眠漂移。运行在独立线程 mgba-frame-loop。
+ * 帧循环：按「目标 FPS × 倍速」的节奏调用 {@link EmulatorCore#runOnce()}。
+ *
+ * <p>绝对时间调度（{@code nextFrame += frameNanos}）防止睡眠漂移。
+ * 落后超过两帧时自动重新同步。
+ *
+ * <p>线程模型：内部启动 daemon 线程 {@code mgba-frame-loop}，
+ * {@link #stop()} 会阻塞等待线程退出（最多 1 秒）。
  */
 public final class EmulationLoop {
 
     private final EmulatorCore core;
     private final AtomicBoolean running = new AtomicBoolean(false);
+
     private volatile double speedMultiplier = 1.0;
     private volatile double targetFps = 60.0;
-    private Thread thread;
-
-    /** 每帧完成后回调（用于通知渲染层）。 */
     private volatile Runnable onFrameProduced = () -> {};
+    private Thread thread;
 
     public EmulationLoop(EmulatorCore core) {
         this.core = core;
     }
 
+    /** 设置倍速（0.2 ~ 16.0），1.0 = 原速。 */
     public void setSpeedMultiplier(double speed) {
         this.speedMultiplier = speed;
     }
@@ -29,10 +34,12 @@ public final class EmulationLoop {
         return speedMultiplier;
     }
 
+    /** 设置目标 FPS（通常从 AvInfo 获取）。 */
     public void setTargetFps(double fps) {
         this.targetFps = fps;
     }
 
+    /** 注册每帧完成后的回调（用于通知渲染层重绘）。 */
     public void setOnFrameProduced(Runnable callback) {
         this.onFrameProduced = callback;
     }
@@ -41,6 +48,7 @@ public final class EmulationLoop {
         return running.get();
     }
 
+    /** 启动帧循环。已在运行时为空操作。 */
     public void start() {
         if (running.compareAndSet(false, true)) {
             thread = new Thread(this::loopBody, "mgba-frame-loop");
@@ -50,6 +58,7 @@ public final class EmulationLoop {
         }
     }
 
+    /** 停止帧循环并等待线程退出（最多 1 秒）。 */
     public void stop() {
         running.set(false);
         if (thread != null) {
@@ -62,45 +71,49 @@ public final class EmulationLoop {
         }
     }
 
+    // ── 内部 ──────────────────────────────────────────────────
+
     private void loopBody() {
         long nextFrame = System.nanoTime();
+
         while (running.get()) {
-            long t0 = System.nanoTime();
-            int result = core.runOnce();
-            if (result != 0) {
-                // runOnce 失败：短暂等待后继续（核心可能恢复）
+            if (core.runOnce() != 0) {
+                // 核心调用失败：短暂等待后重新同步时间轴
                 try { Thread.sleep(10); } catch (InterruptedException e) { return; }
                 nextFrame = System.nanoTime();
                 continue;
             }
 
             onFrameProduced.run();
+            nextFrame += frameNanos();
+            long sleep = nextFrame - System.nanoTime();
 
-            double fps = targetFps * speedMultiplier;
-            long frameNanos = Math.max(1_000_000L, (long) (1_000_000_000.0 / fps));
-            nextFrame += frameNanos;
-
-            long now = System.nanoTime();
-            long sleep = nextFrame - now;
-
-            if (sleep < -frameNanos * 2) {
-                // 落后太多，重新同步
-                nextFrame = now;
-            } else if (sleep > 1_000_000L) {
-                try {
-                    Thread.sleep((sleep - 1_000_000L) / 1_000_000L);
-                } catch (InterruptedException e) {
-                    return;
-                }
-                // 最后 1ms 自旋
-                while (System.nanoTime() < nextFrame && running.get()) {
-                    // spin
-                }
-            } else if (sleep > 0) {
-                while (System.nanoTime() < nextFrame && running.get()) {
-                    // spin
-                }
+            if (sleep < -frameNanos() * 2) {
+                // 落后太多：重新同步
+                nextFrame = System.nanoTime();
+            } else {
+                sleepUntil(nextFrame);
             }
+        }
+    }
+
+    private long frameNanos() {
+        double fps = targetFps * speedMultiplier;
+        return Math.max(1_000_000L, (long) (1_000_000_000.0 / fps));
+    }
+
+    /** 睡眠到目标时间点，最后 1ms 自旋以提高精度。 */
+    private void sleepUntil(long deadline) {
+        long sleep = deadline - System.nanoTime();
+        if (sleep > 1_000_000L) {
+            try {
+                Thread.sleep((sleep - 1_000_000L) / 1_000_000L);
+            } catch (InterruptedException e) {
+                return;
+            }
+        }
+        while (System.nanoTime() < deadline && running.get()) {
+            // 最后 1ms 自旋
         }
     }
 }
