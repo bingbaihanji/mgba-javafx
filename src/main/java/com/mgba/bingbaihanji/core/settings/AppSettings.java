@@ -8,8 +8,8 @@ package com.mgba.bingbaihanji.core.settings;
  */
 public final class AppSettings {
 
-    /** 默认倍速。 */
-    public double gameSpeed = 4.0;
+    /** 默认倍速（原速；倍速播放时音频会被静音，避免环形缓冲积压）。 */
+    public double gameSpeed = 1.0;
 
     /** 音量（0–100）。 */
     public int soundVolume = 100;
@@ -50,15 +50,4 @@ public final class AppSettings {
         return copy;
     }
 
-    /**
-     * 实际生效的音量。
-     *
-     * @return 关闭声音时为 0，否则为 {@link #soundVolume} 换算到 0–1
-     */
-    public float effectiveVolume() {
-        if (!enableSound) {
-            return 0f;
-        }
-        return Math.clamp(soundVolume, 0, 100) / 100f;
-    }
 }

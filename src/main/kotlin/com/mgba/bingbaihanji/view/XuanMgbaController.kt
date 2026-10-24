@@ -69,7 +69,7 @@ class XuanMgbaController : MenuActions {
     private var audioSink: SourceDataLineAudioSink? = null
     private var romLoaded = false
     private var paused = false
-    private var speedMultiplier = 4.0
+    private var speedMultiplier = 1.0
     private var volume = 1.0f
 
     /** 是否处于快进状态（与用户设定的常驻倍速分开）。 */
@@ -138,7 +138,7 @@ class XuanMgbaController : MenuActions {
 
         // 应用持久化设置（此时 JavaFX 控件已就绪）
         speedMultiplier = settings.gameSpeed
-        volume = settings.effectiveVolume()
+        volume = settings.soundVolume / 100f
         videoRenderer.setStretchToFit(settings.stretchToFit)
         menuBar.selectSpeed(settings.gameSpeed)
         menuBar.selectVolume(settings.soundVolume)
@@ -267,6 +267,7 @@ class XuanMgbaController : MenuActions {
         } else {
             loop?.start()
             audioPump?.resume()
+            applyEffectiveVolume()
             statusBar.showMessage("已继续")
         }
     }
@@ -350,6 +351,7 @@ class XuanMgbaController : MenuActions {
         speedMultiplier = speed
         fastForward = false
         loop?.setSpeedMultiplier(speed)
+        applyEffectiveVolume()
         statusBar.setSpeed(speed)
         settings.gameSpeed = speed
         persistSettings()
@@ -481,8 +483,8 @@ class XuanMgbaController : MenuActions {
         statusBar.setSpeed(updated.gameSpeed)
         menuBar.selectSpeed(updated.gameSpeed)
 
-        volume = updated.effectiveVolume()
-        audioSink?.setVolume(volume)
+        volume = updated.soundVolume / 100f
+        applyEffectiveVolume()
         menuBar.selectVolume(updated.soundVolume)
 
         videoRenderer.setStretchToFit(updated.stretchToFit)
@@ -549,18 +551,30 @@ class XuanMgbaController : MenuActions {
 
     override fun onToggleMute() {
         settings.enableSound = !settings.enableSound
-        volume = settings.effectiveVolume()
-        audioSink?.setVolume(volume)
+        volume = settings.soundVolume / 100f
+        applyEffectiveVolume()
         statusBar.showMessage(if (settings.enableSound) "声音已开启" else "已静音")
         persistSettings()
     }
 
     override fun onVolumeChanged(volume: Float) {
         this.volume = volume
-        audioSink?.setVolume(volume)
         settings.soundVolume = (volume * 100).toInt()
         settings.enableSound = true
+        applyEffectiveVolume()
         persistSettings()
+    }
+
+    /**
+     * 把音量同步到音频设备。
+     *
+     * <p>非 1x 速度时强制静音：音频环按真实时间消费，倍速只会让缓冲积压后
+     * 大段丢帧——听起来是断续的噪音，不如安静地快进。
+     */
+    private fun applyEffectiveVolume() {
+        val speed = loop?.speedMultiplier ?: speedMultiplier
+        val effective = if (!settings.enableSound || speed != 1.0) 0f else volume
+        audioSink?.setVolume(effective)
     }
 
     override fun onToggleFullscreen() {
@@ -597,6 +611,7 @@ class XuanMgbaController : MenuActions {
         fastForward = !fastForward
         val newSpeed = if (fastForward) FAST_FORWARD_SPEED else speedMultiplier
         loop?.setSpeedMultiplier(newSpeed)
+        applyEffectiveVolume()
         statusBar.setSpeed(newSpeed)
         statusBar.showMessage(if (fastForward) "快进：${FAST_FORWARD_SPEED}x" else "恢复 ${speedMultiplier}x")
     }
@@ -638,7 +653,6 @@ class XuanMgbaController : MenuActions {
             // 音频
             val sink = SourceDataLineAudioSink(av.sampleRate)
             audioSink = sink
-            sink.setVolume(volume)
             val pump = AudioPump(c, sink)
             audioPump = pump
             pump.start()
@@ -649,6 +663,7 @@ class XuanMgbaController : MenuActions {
             emuLoop.setSpeedMultiplier(speedMultiplier)
             loop = emuLoop
             emuLoop.start()
+            applyEffectiveVolume()
 
             romLoaded = true
             paused = false

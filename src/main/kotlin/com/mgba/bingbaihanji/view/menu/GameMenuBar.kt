@@ -76,7 +76,7 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         for (speed in listOf(0.5, 1.0, 2.0, 4.0, 8.0, 16.0)) {
             val item = RadioMenuItem("${speed}x").apply {
                 toggleGroup = speedGroup
-                isSelected = speed == 4.0
+                isSelected = speed == 1.0
                 setOnAction { actions.onSpeedChanged(speed) }
             }
             speedRadios[speed] = item

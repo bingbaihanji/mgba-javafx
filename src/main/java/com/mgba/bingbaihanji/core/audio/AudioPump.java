@@ -29,6 +29,9 @@ public final class AudioPump {
 
     private volatile boolean paused;
 
+    /** 音频设备是否可用；打开失败时置 false，游戏照常运行但不输出声音。 */
+    private volatile boolean audioAvailable = true;
+
     private Thread thread;
 
     public AudioPump(AudioSource source, AudioSink sink) {
@@ -38,14 +41,19 @@ public final class AudioPump {
         this.pcmArray = new short[READ_BATCH_FRAMES * 2];
     }
 
-    /** 启动音频泵。已在运行时为空操作。 */
+    /**
+     * 启动音频泵。已在运行时为空操作。
+     *
+     * <p>音频设备的打开放在泵线程里做：一是打开设备可能阻塞，不该卡住调用方
+     * （通常是 JavaFX 线程）；二是打不开设备时只退化为静音，不能让整局游戏失败。
+     */
     public void start() {
         if (running) {
             return;
         }
         running = true;
         paused = false;
-        sink.start();
+        audioAvailable = true;
         thread = new Thread(this::pumpLoop, "mgba-audio");
         thread.setDaemon(true);
         thread.start();
@@ -83,6 +91,13 @@ public final class AudioPump {
     // ── 内部 ──────────────────────────────────────────────────
 
     private void pumpLoop() {
+        try {
+            sink.start();
+        } catch (RuntimeException e) {
+            audioAvailable = false;
+            System.err.println("音频设备不可用，本次运行将静音: " + e.getMessage());
+        }
+
         while (running) {
             if (paused) {
                 discardBacklog();
@@ -98,7 +113,9 @@ public final class AudioPump {
             }
 
             copyToShortArray(frames);
-            sink.write(pcmArray, frames);
+            if (audioAvailable) {
+                sink.write(pcmArray, frames);
+            }
         }
     }
 
