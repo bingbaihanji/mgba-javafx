@@ -32,14 +32,16 @@ import java.time.format.DateTimeFormatter
 class SaveSlotsDialog(
     private val owner: Window?,
     private val session: GameSaveSession,
-    private val onMessage: (String) -> Unit
+    private val onMessage: (String) -> Unit,
+    private val onLoaded: () -> Unit = {}
 ) {
 
     private val timeFormat: DateTimeFormatter =
         DateTimeFormatter.ofPattern("MM-dd HH:mm:ss").withZone(ZoneId.systemDefault())
 
+    /** 普通槽位 1–9，外加隐藏的自动槽位。 */
     private val slots = FXCollections.observableArrayList(
-        (0 until SaveStateStore.SLOT_COUNT).toList()
+        (0 until SaveStateStore.SLOT_COUNT).toList() + SaveStateStore.AUTO_SLOT
     )
 
     private lateinit var listView: ListView<Int>
@@ -82,6 +84,7 @@ class SaveSlotsDialog(
             else "读取失败：${result.description()}"
         )
         if (result.ok()) {
+            onLoaded()
             dialog.close()
         } else {
             listView.refresh()
@@ -172,7 +175,7 @@ class SaveSlotsDialog(
             }
 
             val exists = session.hasState(slot)
-            titleLabel.text = "槽位 ${slot + 1}"
+            titleLabel.text = if (slot == SaveStateStore.AUTO_SLOT) "自动槽位" else "槽位 ${slot + 1}"
             timeLabel.text = if (exists) {
                 "保存于 " + timeFormat.format(Instant.ofEpochMilli(session.stateTimestamp(slot)))
             } else {

@@ -21,6 +21,14 @@ public final class EmulationLoop {
 
     private volatile double targetFps = 60.0;
 
+    /**
+     * 音频同步的微调系数（0.95–1.05）。
+     *
+     * <p>由控制器按音频队列水位每秒更新一次，用于吸收模拟器与声卡之间的
+     * 极小时钟差；只有原速时才启用，倍速/暂停时保持 1.0。
+     */
+    private volatile double audioCorrection = 1.0;
+
     private volatile Runnable onFrameProduced = () -> {};
 
     private Thread thread;
@@ -41,6 +49,20 @@ public final class EmulationLoop {
     /** 设置目标 FPS（通常从 AvInfo 获取）。 */
     public void setTargetFps(double fps) {
         this.targetFps = fps;
+    }
+
+    /**
+     * 设置音频同步微调系数。
+     *
+     * @param correction 1.0 为不调整；调用方负责限制在 0.95–1.05
+     */
+    public void setAudioCorrection(double correction) {
+        this.audioCorrection = Math.max(0.95, Math.min(1.05, correction));
+    }
+
+    /** 当前音频同步微调系数。 */
+    public double getAudioCorrection() {
+        return audioCorrection;
     }
 
     /** 注册每帧完成后的回调（用于通知渲染层重绘）。 */
@@ -106,7 +128,7 @@ public final class EmulationLoop {
     }
 
     private long frameNanos() {
-        double fps = targetFps * speedMultiplier;
+        double fps = targetFps * speedMultiplier * audioCorrection;
         return Math.max(1_000_000L, (long) (1_000_000_000.0 / fps));
     }
 

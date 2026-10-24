@@ -49,6 +49,12 @@ class MegaStateFileTest {
         assertArrayEquals(savedata, back.extdata().get(MegaStateFile.EXTDATA_SAVEDATA));
         assertArrayEquals(rtc, back.extdata().get(MegaStateFile.EXTDATA_RTC));
         assertEquals(coreState.length, back.coreState().length);
+
+        // ROM 短 ID 写在 tEXt 块里，读回来要一致
+        MegaStateFile.Payload tagged = new MegaStateFile.Payload(
+                payload.coreState(), payload.extdata(), "0123456789abcdef");
+        byte[] taggedPng = MegaStateFile.writePng(tagged, screenshot);
+        assertEquals("0123456789abcdef", MegaStateFile.readPng(taggedPng).romId());
     }
 
     private static void putEntry(ByteBuffer buffer, int tag, int size, long offset) {

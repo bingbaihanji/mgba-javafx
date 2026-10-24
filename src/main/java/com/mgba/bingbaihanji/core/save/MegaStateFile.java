@@ -54,9 +54,13 @@ public final class MegaStateFile {
      *
      * @param coreState 核心状态（对应 PNG 的 gbAs）
      * @param extdata   扩展数据（tag → 原始数据）
+     * @param romId     写入时记录的 ROM 短 ID（读取旧文件时可能为 null）
      */
-    public record Payload(byte[] coreState, Map<Integer, byte[]> extdata) {
+    public record Payload(byte[] coreState, Map<Integer, byte[]> extdata, String romId) {
     }
+
+    /** 我们在 PNG tEXt 块里记录 ROM 短 ID 用的关键字。 */
+    private static final String ROM_ID_KEYWORD = "mGBA-romId";
 
     /** 文件是否是 PNG（mGBA 的即时存档）。 */
     public static boolean isPng(byte[] data) {
@@ -85,6 +89,7 @@ public final class MegaStateFile {
             throw new IOException("不是 PNG 存档");
         }
         byte[] coreState = null;
+        String romId = null;
         Map<Integer, byte[]> extdata = new LinkedHashMap<>();
 
         int position = PNG_SIGNATURE.length;
@@ -98,6 +103,7 @@ public final class MegaStateFile {
             switch (type) {
                 case "gbAs" -> coreState = inflate(png, dataStart, length);
                 case "gbAx" -> readExtdataChunk(png, dataStart, length, extdata);
+                case "tEXt" -> romId = readRomIdText(png, dataStart, length, romId);
                 default -> {
                     // IHDR/IDAT/IEND 等标准块与其它扩展都忽略
                 }
@@ -111,7 +117,26 @@ public final class MegaStateFile {
         if (coreState == null) {
             throw new IOException("PNG 存档里没有 gbAs 块");
         }
-        return new Payload(coreState, extdata);
+        return new Payload(coreState, extdata, romId);
+    }
+
+    /** 从 tEXt 块里读 ROM 短 ID；不是我们的关键字时返回原值。 */
+    private static String readRomIdText(byte[] png, int start, int length, String current) {
+        int nul = -1;
+        for (int i = 0; i < length; i++) {
+            if (png[start + i] == 0) {
+                nul = i;
+                break;
+            }
+        }
+        if (nul <= 0) {
+            return current;
+        }
+        String keyword = new String(png, start, nul, StandardCharsets.ISO_8859_1);
+        if (!ROM_ID_KEYWORD.equals(keyword)) {
+            return current;
+        }
+        return new String(png, start + nul + 1, length - nul - 1, StandardCharsets.ISO_8859_1);
     }
 
     /**
@@ -148,7 +173,7 @@ public final class MegaStateFile {
 
         byte[] coreState = new byte[tableStart];
         System.arraycopy(named, 0, coreState, 0, tableStart);
-        return new Payload(coreState, extdata);
+        return new Payload(coreState, extdata, null);
     }
 
     private static void readExtdataChunk(byte[] png, int start, int length,
@@ -262,6 +287,18 @@ public final class MegaStateFile {
         writeChunk(out, "IHDR", ihdr);
 
         writeChunk(out, "IDAT", encodeImage(screenshot, width, height));
+
+        // 记录 ROM 短 ID：mGBA 会忽略这个 tEXt 块，我们自己读档时用来校验
+        if (payload.romId() != null && !payload.romId().isBlank()) {
+            byte[] keyword = ROM_ID_KEYWORD.getBytes(StandardCharsets.ISO_8859_1);
+            byte[] value = payload.romId().getBytes(StandardCharsets.ISO_8859_1);
+            byte[] text = new byte[keyword.length + 1 + value.length];
+            System.arraycopy(keyword, 0, text, 0, keyword.length);
+            text[keyword.length] = 0;
+            System.arraycopy(value, 0, text, keyword.length + 1, value.length);
+            writeChunk(out, "tEXt", text);
+        }
+
         writeChunk(out, "gbAs", deflate(payload.coreState()));
 
         for (Map.Entry<Integer, byte[]> entry : payload.extdata().entrySet()) {

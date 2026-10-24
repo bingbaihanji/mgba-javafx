@@ -30,7 +30,10 @@ public enum SaveError {
     CORE_REJECTED("核心拒绝该操作"),
 
     /** 当前没有加载 ROM。 */
-    NO_GAME("尚未加载 ROM");
+    NO_GAME("尚未加载 ROM"),
+
+    /** 没有可撤销的读档备份。 */
+    NO_BACKUP("没有可撤销的读档");
 
     private final String description;
 

@@ -42,6 +42,9 @@ public final class GameSaveSession {
 
     private final BatterySaveStore battery;
 
+    /** 读档前的状态备份（撤销读档用，只保留最近一次）。 */
+    private byte[] backupState;
+
     private GameSaveSession(EmulatorCore core, RomIdentity identity, Path romPath, Path gameDirectory) {
         this.core = core;
         this.identity = identity;
@@ -147,7 +150,10 @@ public final class GameSaveSession {
         }
 
         try {
-            byte[] png = MegaStateFile.writePng(payload, ScreenshotWriter.capture(core));
+            // 写入 ROM 短 ID，读档时能挡住"拿错 ROM 的存档"
+            MegaStateFile.Payload tagged = new MegaStateFile.Payload(
+                    payload.coreState(), payload.extdata(), identity.romId());
+            byte[] png = MegaStateFile.writePng(tagged, ScreenshotWriter.capture(core));
             AtomicFiles.write(target, png);
             return SaveError.OK;
         } catch (IOException | RuntimeException e) {
@@ -267,15 +273,74 @@ public final class GameSaveSession {
      * @return 操作结果
      */
     public SaveError loadState(int slot) {
+        // 读档前先备份当前状态，支持"撤销读档"
+        byte[] previousBackup = backupState;
+        byte[] current = serializeNamedState();
+        if (current != null) {
+            backupState = current;
+        }
+
+        SaveError result;
         Path mega = megaStateFile(slot);
         if (mega != null && Files.isRegularFile(mega)) {
             try {
-                return loadMegaState(mega);
+                result = loadMegaState(mega);
             } catch (IOException e) {
-                return SaveError.FILE_ERROR;
+                result = SaveError.FILE_ERROR;
             }
+        } else {
+            result = loadLegacyState(slot);
         }
-        return loadLegacyState(slot);
+
+        if (result != SaveError.OK) {
+            // 读档失败：保留上一次还能用的备份，不要被本次覆盖
+            backupState = previousBackup;
+        }
+        return result;
+    }
+
+    /** 是否有可撤销的读档备份。 */
+    public boolean hasBackup() {
+        return backupState != null;
+    }
+
+    /**
+     * 恢复到读档前的状态（撤销读档），成功后备份即被消费。
+     *
+     * @return 操作结果
+     */
+    public SaveError restoreBackup() {
+        byte[] backup = backupState;
+        if (backup == null) {
+            return SaveError.NO_BACKUP;
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocateDirect(backup.length);
+        buffer.put(backup).flip();
+        if (!core.unserialize(buffer, backup.length)) {
+            return SaveError.CORE_REJECTED;
+        }
+
+        // 备份里也带电池存档，一并恢复（拆分失败就只恢复核心状态）
+        try {
+            MegaStateFile.Payload payload = MegaStateFile.splitNamedState(backup, core.sramSize());
+            applySavedata(payload.extdata());
+        } catch (IOException ignored) {
+            // 不影响撤销本身
+        }
+
+        backupState = null;
+        return SaveError.OK;
+    }
+
+    /** 把状态里内嵌的电池存档写回核心（与 mGBA GUI 的行为一致）。 */
+    private void applySavedata(Map<Integer, byte[]> extdata) {
+        byte[] savedata = extdata.get(MegaStateFile.EXTDATA_SAVEDATA);
+        if (savedata != null && savedata.length > 0) {
+            ByteBuffer sram = ByteBuffer.allocateDirect(savedata.length);
+            sram.put(savedata).flip();
+            core.loadSram(sram, savedata.length);
+        }
     }
 
     /** 加载 mGBA 的 .ssN（PNG 或老式 named state）。 */
@@ -287,6 +352,11 @@ public final class GameSaveSession {
         if (MegaStateFile.isPng(data)) {
             try {
                 MegaStateFile.Payload payload = MegaStateFile.readPng(data);
+                // 新格式带 ROM 短 ID；旧 mGBA 存档没有，按 mGBA 的做法不做限制
+                if (payload.romId() != null && !payload.romId().isBlank()
+                        && !identity.romId().equalsIgnoreCase(payload.romId())) {
+                    return SaveError.ROM_MISMATCH;
+                }
                 coreState = payload.coreState();
                 extdata = payload.extdata();
             } catch (IOException e) {
@@ -304,12 +374,7 @@ public final class GameSaveSession {
         }
 
         // 与 mGBA GUI 一样，把状态里的电池存档一并恢复
-        byte[] savedata = extdata.get(MegaStateFile.EXTDATA_SAVEDATA);
-        if (savedata != null && savedata.length > 0) {
-            ByteBuffer sram = ByteBuffer.allocateDirect(savedata.length);
-            sram.put(savedata).flip();
-            core.loadSram(sram, savedata.length);
-        }
+        applySavedata(extdata);
         return SaveError.OK;
     }
 

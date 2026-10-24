@@ -115,6 +115,11 @@ public final class AudioPump {
         return running;
     }
 
+    /** 音频设备是否成功打开（失败时本局静音）。 */
+    public boolean isAudioAvailable() {
+        return audioAvailable;
+    }
+
     // ── 内部 ──────────────────────────────────────────────────
 
     private void pumpLoop() {

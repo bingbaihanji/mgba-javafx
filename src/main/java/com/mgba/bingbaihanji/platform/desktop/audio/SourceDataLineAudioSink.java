@@ -96,6 +96,25 @@ public final class SourceDataLineAudioSink implements AudioSink {
         this.volume = Math.max(0f, Math.min(1f, volume));
     }
 
+    /**
+     * 声卡累计播放的帧数，换算成「核心采样率」下的帧数。
+     *
+     * <p>用于音频同步：与核心累计产出帧数比较，得到两个时钟的速率差。
+     *
+     * @return 核心帧数；线路未打开或未启动时返回 -1
+     */
+    public long playedCoreFrames() {
+        SourceDataLine current = line;
+        if (current == null || !started) {
+            return -1;
+        }
+        long outputFrames = current.getLongFramePosition();
+        if (!needsResample) {
+            return outputFrames;
+        }
+        return Math.round(outputFrames * (coreSampleRate / outputSampleRate));
+    }
+
     @Override
     public void close() {
         started = false;

@@ -164,6 +164,10 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
             items.addAll(
                 saveSlots,
                 loadSlots,
+                MenuItem("撤销读档(_U)").apply {
+                    accelerator = KeyCombination.valueOf("Ctrl+Z")
+                    setOnAction { actions.onUndoLoadState() }
+                },
                 SeparatorMenuItem(),
                 MenuItem("存档管理(_M)...").apply {
                     setOnAction { actions.onOpenSaveManager() }
@@ -324,6 +328,9 @@ interface MenuActions {
 
     /** 打开带缩略图的存档管理对话框。 */
     fun onOpenSaveManager()
+
+    /** 撤销上一次读档，恢复到读档前的状态。 */
+    fun onUndoLoadState()
 
     /** 打开金手指管理对话框。 */
     fun onManageCheats()

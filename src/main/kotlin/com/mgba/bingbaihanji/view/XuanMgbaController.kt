@@ -1,6 +1,7 @@
 package com.mgba.bingbaihanji.view
 
 import com.mgba.bingbaihanji.core.audio.AudioPump
+import com.mgba.bingbaihanji.core.audio.AudioSync
 import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
@@ -49,6 +50,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 /**
  * 组件组装与业务协调器。
@@ -107,6 +109,13 @@ class XuanMgbaController : MenuActions {
 
     /** 周期保存电池存档的调度器。 */
     private var autoSaveExecutor: ScheduledExecutorService? = null
+
+    /** 音频同步：每秒按音频环水位微调模拟速度。 */
+    private val audioSync = AudioSync()
+    private var audioSyncTimer: Timeline? = null
+
+    @Volatile
+    private var lastAudioCorrection = 1.0
 
     /** 退出流程已经开始，避免关窗和菜单退出重复执行。 */
     private var exiting = false
@@ -362,6 +371,8 @@ class XuanMgbaController : MenuActions {
         if (!paused) {
             loop?.start()
         }
+        // 复位后音频环里是复位前的旧声音，丢掉
+        audioPump?.flush()
         statusBar.showMessage("已复位")
     }
 
@@ -391,6 +402,26 @@ class XuanMgbaController : MenuActions {
             if (result.ok()) "已读取槽位 ${slot + 1}"
             else "读取失败：${result.description()}"
         )
+        if (result.ok()) {
+            // 读档后音频环里还是读档前的旧声音
+            audioPump?.flush()
+        }
+    }
+
+    override fun onUndoLoadState() {
+        val session = saveSession
+        if (session == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val result = session.restoreBackup()
+        statusBar.showMessage(
+            if (result.ok()) "已撤销读档"
+            else "撤销失败：${result.description()}"
+        )
+        if (result.ok()) {
+            audioPump?.flush()
+        }
     }
 
     override fun onOpenSaveManager() {
@@ -399,9 +430,12 @@ class XuanMgbaController : MenuActions {
             statusBar.showMessage("请先加载 ROM")
             return
         }
-        SaveSlotsDialog(rootPane.scene?.window, session) { message ->
-            statusBar.showMessage(message)
-        }.show()
+        SaveSlotsDialog(
+            rootPane.scene?.window,
+            session,
+            onMessage = { message -> statusBar.showMessage(message) },
+            onLoaded = { audioPump?.flush() }
+        ).show()
     }
 
     override fun onSaveAutoState() {
@@ -567,7 +601,12 @@ class XuanMgbaController : MenuActions {
 
         values[DebugCategory.FPS] = "FPS  游戏 %.1f / 绘制 %.1f   帧 %.1f ms\n丢帧 %d"
             .format(gameFps, drawFps, frameTimeMs, current?.framesDropped() ?: 0L)
-        values[DebugCategory.SPEED] = "速度  ${speed}x$speedMode"
+        val syncText = if (abs(lastAudioCorrection - 1.0) >= 0.0005) {
+            "（音频同步 %+.2f%%）".format((lastAudioCorrection - 1.0) * 100)
+        } else {
+            ""
+        }
+        values[DebugCategory.SPEED] = "速度  ${speed}x$speedMode$syncText"
 
         values[DebugCategory.SHADER] = when (shaderPreset) {
             ShaderPreset.OFF -> "着色器  关闭"
@@ -840,6 +879,7 @@ class XuanMgbaController : MenuActions {
             loop = emuLoop
             emuLoop.start()
             applyEffectiveVolume()
+            startAudioSync()
 
             romLoaded = true
             paused = false
@@ -905,7 +945,46 @@ class XuanMgbaController : MenuActions {
         autoSaveExecutor = null
     }
 
+    /** 启动音频同步：每秒按音频环水位把模拟速度微调 ±1%。 */
+    private fun startAudioSync() {
+        stopAudioSync()
+        audioSync.reset()
+        loop?.setAudioCorrection(1.0)
+        lastAudioCorrection = 1.0
+        audioSyncTimer = Timeline(
+            KeyFrame(Duration.seconds(1.0), { tickAudioSync() })
+        ).apply {
+            cycleCount = Timeline.INDEFINITE
+            play()
+        }
+    }
+
+    private fun stopAudioSync() {
+        audioSyncTimer?.stop()
+        audioSyncTimer = null
+    }
+
+    private fun tickAudioSync() {
+        val current = core ?: return
+        val emulation = loop ?: return
+        val pump = audioPump
+        val sink = audioSink
+        // 暂停、倍速、音频设备不可用时不做修正
+        if (pump == null || !pump.isAudioAvailable() || sink == null
+            || paused || emulation.speedMultiplier != 1.0
+        ) {
+            audioSync.reset()
+            emulation.setAudioCorrection(1.0)
+            lastAudioCorrection = 1.0
+            return
+        }
+        val correction = audioSync.sample(current.audioFrameCount(), sink.playedCoreFrames())
+        emulation.setAudioCorrection(correction)
+        lastAudioCorrection = correction
+    }
+
     private fun shutdown() {
+        stopAudioSync()
         stopAutoSave()
         runCatching { loop?.stop() }
         runCatching { audioPump?.stop() }
