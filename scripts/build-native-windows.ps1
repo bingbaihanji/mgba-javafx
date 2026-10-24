@@ -402,7 +402,7 @@ if (-not $SkipVerify) {
         if ($binary -eq $distFrontend) {
             $missing = @()
             foreach ($symbol in $requiredJniSymbols) {
-                $jniName = "Java_com_mgba_bingbaihanji_emulator_NativeEmulator_$symbol"
+                $jniName = "Java_com_mgba_bingbaihanji_mgbaplatform_emulator_NativeEmulator_$symbol"
                 if ($dumpText -notmatch [regex]::Escape($jniName)) {
                     $missing += $jniName
                 }
