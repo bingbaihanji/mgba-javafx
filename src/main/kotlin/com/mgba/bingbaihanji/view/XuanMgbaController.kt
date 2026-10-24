@@ -353,6 +353,9 @@ class XuanMgbaController : MenuActions {
         loop?.setSpeedMultiplier(speed)
         applyEffectiveVolume()
         statusBar.setSpeed(speed)
+        if (speed != 1.0) {
+            statusBar.showMessage("${speed}x（倍速下音频静音）", 2.5)
+        }
         settings.gameSpeed = speed
         persistSettings()
     }

@@ -245,13 +245,24 @@ public final class JniEmulatorCore implements EmulatorCore {
     @Override
     public void cheatReset() {
         checkOpen();
-        NativeEmulator.nativeCheatReset(handle);
+        // 金手指会改核心内部的作弊装置，必须与 retro_run 串行
+        lock.lock();
+        try {
+            NativeEmulator.nativeCheatReset(handle);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public boolean cheatSet(int index, boolean enabled, String code) {
         checkOpen();
-        return NativeEmulator.nativeCheatSet(handle, index, enabled, code);
+        lock.lock();
+        try {
+            return NativeEmulator.nativeCheatSet(handle, index, enabled, code);
+        } finally {
+            lock.unlock();
+        }
     }
 
     // ── SRAM / RTC ────────────────────────────────────────────
@@ -317,7 +328,13 @@ public final class JniEmulatorCore implements EmulatorCore {
     @Override
     public long serializeSize() {
         checkOpen();
-        return NativeEmulator.nativeSerializeSize(handle);
+        // 与 serialize() 用同一把锁：尺寸计算要读核心状态，不能和 retro_run 撞车
+        lock.lock();
+        try {
+            return NativeEmulator.nativeSerializeSize(handle);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
