@@ -5,6 +5,7 @@ import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
 import com.mgba.bingbaihanji.core.option.CoreOptionService
+import com.mgba.bingbaihanji.core.option.CoreOptionsStore
 import com.mgba.bingbaihanji.core.save.GameSaveSession
 import com.mgba.bingbaihanji.core.save.RomIdentity
 import com.mgba.bingbaihanji.core.save.SaveStateStore
@@ -74,6 +75,10 @@ class XuanMgbaController : MenuActions {
     /** 设置存储与当前设置。 */
     private val settingsStore = SettingsStore()
     private var settings = settingsStore.load()
+
+    /** 核心选项的持久化（键 → 值文本）。 */
+    private val coreOptionsStore = CoreOptionsStore()
+    private var savedCoreOptions: Map<String, String> = coreOptionsStore.load()
 
     /** 当前 ROM 文件，复位时重新加载用。 */
     private var currentRom: File? = null
@@ -265,6 +270,7 @@ class XuanMgbaController : MenuActions {
         }
         runCatching { saveSession?.loadBattery() }
         cheatService?.apply()
+        CoreOptionService(c).apply(savedCoreOptions)
 
         loop?.start()
         statusBar.showMessage("已复位")
@@ -490,6 +496,9 @@ class XuanMgbaController : MenuActions {
                     applied++
                 }
             }
+            // 记住全部选项，下次加载 ROM / 复位时自动恢复
+            savedCoreOptions = service.snapshot()
+            runCatching { coreOptionsStore.save(savedCoreOptions) }
             statusBar.showMessage("已应用 $applied 项核心选项（部分选项需重新打开 ROM）")
         }.show()
     }
@@ -565,6 +574,9 @@ class XuanMgbaController : MenuActions {
 
             // 金手指：加载该 ROM 的列表并立即应用
             cheatService = CheatService.open(c, identity).also { it.apply() }
+
+            // 恢复上次的核心选项（如色彩校正、帧混合）
+            CoreOptionService(c).apply(savedCoreOptions)
 
             // 音频
             val sink = SourceDataLineAudioSink(av.sampleRate)
@@ -686,10 +698,14 @@ class XuanMgbaController : MenuActions {
             KeyCode.RIGHT to GbaButton.RIGHT
         )
 
-        /** ROM 文件扩展名过滤器。 */
+        /**
+         * ROM 文件扩展名过滤器。
+         *
+         * 不提供 ZIP：本项目的 Libretro 桥没有实现 VFS，
+         * 核心无法从压缩包里读取 ROM，选中只会得到一个加载失败。
+         */
         private val ROM_FILTERS = listOf(
             FileChooser.ExtensionFilter("GB/GBA ROM", "*.gba", "*.gbc", "*.gb", "*.agb"),
-            FileChooser.ExtensionFilter("ZIP 压缩包", "*.zip"),
             FileChooser.ExtensionFilter("所有文件", "*.*")
         )
     }

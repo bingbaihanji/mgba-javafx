@@ -4,7 +4,9 @@ import com.mgba.bingbaihanji.core.emulation.EmulatorCore;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 核心选项的读取与设置。
@@ -56,5 +58,57 @@ public final class CoreOptionService {
      */
     public boolean set(int index, int valueIndex) {
         return core.setOption(index, valueIndex);
+    }
+
+    /**
+     * 记录当前全部选项（键 → 值文本），用于持久化。
+     *
+     * @return 有序映射
+     */
+    public Map<String, String> snapshot() {
+        Map<String, String> snapshot = new LinkedHashMap<>();
+        for (CoreOption option : load()) {
+            int current = option.current();
+            if (current >= 0 && current < option.values().size()) {
+                snapshot.put(option.key(), option.values().get(current));
+            }
+        }
+        return snapshot;
+    }
+
+    /**
+     * 按保存的「键 → 值文本」恢复选项。
+     *
+     * <p>值文本按忽略大小写与前后空格匹配；匹配不到（核心版本变了）就跳过。
+     *
+     * @param saved 保存的选项
+     * @return 成功应用的项数
+     */
+    public int apply(Map<String, String> saved) {
+        if (saved == null || saved.isEmpty()) {
+            return 0;
+        }
+        int applied = 0;
+        for (CoreOption option : load()) {
+            String wanted = saved.get(option.key());
+            if (wanted == null) {
+                continue;
+            }
+            int valueIndex = indexOfValue(option, wanted);
+            if (valueIndex >= 0 && set(option.index(), valueIndex)) {
+                applied++;
+            }
+        }
+        return applied;
+    }
+
+    private static int indexOfValue(CoreOption option, String wanted) {
+        List<String> values = option.values();
+        for (int i = 0; i < values.size(); i++) {
+            if (values.get(i).strip().equalsIgnoreCase(wanted.strip())) {
+                return i;
+            }
+        }
+        return -1;
     }
 }
