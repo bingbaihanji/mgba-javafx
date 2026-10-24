@@ -41,6 +41,12 @@ fun main() = xuan {
             stage.fullScreenProperty().addListener { _, _, fullscreen ->
                 c.setFullscreenLayout(fullscreen)
             }
+            // 切走窗口时释放按键，避免回来后键一直按着
+            stage.focusedProperty().addListener { _, _, focused ->
+                if (!focused) {
+                    c.releaseAllInput()
+                }
+            }
         }
     }
 }

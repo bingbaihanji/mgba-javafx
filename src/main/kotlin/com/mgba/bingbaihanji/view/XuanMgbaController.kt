@@ -72,6 +72,9 @@ class XuanMgbaController : MenuActions {
     private var speedMultiplier = 4.0
     private var volume = 1.0f
 
+    /** 是否处于快进状态（与用户设定的常驻倍速分开）。 */
+    private var fastForward = false
+
     /** 设置存储与当前设置。 */
     private val settingsStore = SettingsStore()
     private var settings = settingsStore.load()
@@ -127,6 +130,7 @@ class XuanMgbaController : MenuActions {
                 statusBar.showMessage("着色器加载失败：$message", 5.0)
                 shaderPreset = ShaderPreset.OFF
                 settings.shaderPreset = ShaderPreset.OFF.name
+                persistSettings()
                 menuBar.selectShaderPreset(ShaderPreset.OFF)
                 videoRenderer.setShaderPreset(ShaderPreset.OFF)
             }
@@ -188,7 +192,16 @@ class XuanMgbaController : MenuActions {
 
     // ── 输入（JavaFX 线程调用）─────────────────────────────────
 
+    /**
+     * 当前按下的键。JavaFX 不提供"自动重复"标志，按住空格会连发 KEY_PRESSED，
+     * 没有这个集合的话快进会被反复开关。
+     */
+    private val pressedKeys = mutableSetOf<KeyCode>()
+
     fun handleKeyPressed(e: KeyEvent) {
+        if (!pressedKeys.add(e.code)) {
+            return
+        }
         if (e.code == KeyCode.SPACE && romLoaded) {
             toggleFastForward()
             e.consume()
@@ -201,10 +214,17 @@ class XuanMgbaController : MenuActions {
     }
 
     fun handleKeyReleased(e: KeyEvent) {
+        pressedKeys.remove(e.code)
         KEY_MAP[e.code]?.let { btn ->
             core?.release(btn, SOURCE_KEYBOARD)
             e.consume()
         }
+    }
+
+    /** 窗口失焦时释放全部按键与输入状态，避免出现"卡键"。 */
+    fun releaseAllInput() {
+        pressedKeys.clear()
+        core?.resetInput()
     }
 
     // ── MenuActions 实现 ──────────────────────────────────────
@@ -213,7 +233,7 @@ class XuanMgbaController : MenuActions {
         FileChooser().apply {
             title = "选择 ROM"
             extensionFilters.addAll(ROM_FILTERS)
-        }.showOpenDialog(null)?.let { loadRom(it) }
+        }.showOpenDialog(rootPane.scene?.window)?.let { loadRom(it) }
     }
 
     override fun onExit() {
@@ -268,6 +288,9 @@ class XuanMgbaController : MenuActions {
             return
         }
         if (c.loadGame(rom.absolutePath) != 0) {
+            // 卸载成功但重新加载失败：已经没有可运行的游戏，状态要与实际一致
+            paused = true
+            romLoaded = false
             statusBar.showMessage("复位失败：${c.lastError() ?: "无法重新加载 ROM"}")
             return
         }
@@ -325,6 +348,7 @@ class XuanMgbaController : MenuActions {
 
     override fun onSpeedChanged(speed: Double) {
         speedMultiplier = speed
+        fastForward = false
         loop?.setSpeedMultiplier(speed)
         statusBar.setSpeed(speed)
         settings.gameSpeed = speed
@@ -562,12 +586,19 @@ class XuanMgbaController : MenuActions {
 
     // ── 私有 ──────────────────────────────────────────────────
 
+    /**
+     * 快进开关：在「用户设定的常驻倍速」与 [FAST_FORWARD_SPEED] 之间切换。
+     *
+     * 之前用"当前速度大于 1 就降回 1x"实现，常驻倍速被设成 4x 时按快进反而更慢，
+     * 所以快进独立成一个状态。
+     */
     private fun toggleFastForward() {
         if (!romLoaded) return
-        val cur = loop?.speedMultiplier ?: 1.0
-        val newSpeed = if (cur > 1.0) 1.0 else speedMultiplier
+        fastForward = !fastForward
+        val newSpeed = if (fastForward) FAST_FORWARD_SPEED else speedMultiplier
         loop?.setSpeedMultiplier(newSpeed)
         statusBar.setSpeed(newSpeed)
+        statusBar.showMessage(if (fastForward) "快进：${FAST_FORWARD_SPEED}x" else "恢复 ${speedMultiplier}x")
     }
 
     private fun loadRom(file: File) {
@@ -709,6 +740,9 @@ class XuanMgbaController : MenuActions {
 
         /** 电池存档的自动保存间隔（秒）。 */
         private const val AUTO_SAVE_SECONDS = 60L
+
+        /** 快进倍速。 */
+        private const val FAST_FORWARD_SPEED = 16.0
 
         /** GBA 按键映射。 */
         private val KEY_MAP = mapOf(
