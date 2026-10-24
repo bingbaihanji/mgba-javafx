@@ -101,6 +101,9 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 buildSaveStateMenu(),
                 MenuItem("金手指(_C)...").apply {
                     setOnAction { actions.onManageCheats() }
+                },
+                MenuItem("核心选项(_O)...").apply {
+                    setOnAction { actions.onOpenCoreOptions() }
                 }
             )
         }
@@ -252,4 +255,7 @@ interface MenuActions {
 
     /** 打开设置对话框。 */
     fun onOpenSettings()
+
+    /** 打开核心选项对话框。 */
+    fun onOpenCoreOptions()
 }

@@ -4,6 +4,7 @@ import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
+import com.mgba.bingbaihanji.core.option.CoreOptionService
 import com.mgba.bingbaihanji.core.save.GameSaveSession
 import com.mgba.bingbaihanji.core.save.RomIdentity
 import com.mgba.bingbaihanji.core.save.SaveStateStore
@@ -17,6 +18,7 @@ import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.debug.DebugOverlay
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
+import com.mgba.bingbaihanji.view.option.CoreOptionsDialog
 import com.mgba.bingbaihanji.view.settings.SettingsDialog
 import com.mgba.bingbaihanji.view.status.GameStatusBar
 import com.mgba.bingbaihanji.view.video.GameVideoRenderer
@@ -467,6 +469,29 @@ class XuanMgbaController : MenuActions {
     private fun persistSettings() {
         runCatching { settingsStore.save(settings) }
             .onFailure { System.err.println("保存设置失败: ${it.message}") }
+    }
+
+    override fun onOpenCoreOptions() {
+        val current = core
+        if (current == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        val service = CoreOptionService(current)
+        val options = service.load()
+        if (options.isEmpty()) {
+            statusBar.showMessage("当前核心没有可配置选项")
+            return
+        }
+        CoreOptionsDialog(rootPane.scene?.window, options) { selection ->
+            var applied = 0
+            selection.forEach { (index, value) ->
+                if (service.set(index, value)) {
+                    applied++
+                }
+            }
+            statusBar.showMessage("已应用 $applied 项核心选项（部分选项需重新打开 ROM）")
+        }.show()
     }
 
     override fun onManageCheats() {
