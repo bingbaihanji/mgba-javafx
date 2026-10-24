@@ -127,7 +127,43 @@ public final class GameSaveSession {
         } catch (IOException e) {
             return SaveError.FILE_ERROR;
         }
+
+        // 缩略图是"锦上添花"：失败不影响存档本身
+        try {
+            java.awt.image.BufferedImage thumbnail = ScreenshotWriter.capture(core);
+            if (thumbnail != null) {
+                ScreenshotWriter.writePng(thumbnail, thumbnailFile(slot));
+            }
+        } catch (IOException | RuntimeException e) {
+            System.err.println("保存存档缩略图失败: " + e.getMessage());
+        }
         return SaveError.OK;
+    }
+
+    /**
+     * 槽位缩略图文件路径（{@code slotN.png}，与存档同目录）。
+     *
+     * @param slot 槽位号
+     * @return 文件路径
+     */
+    public Path thumbnailFile(int slot) {
+        return states.slotFile(slot).resolveSibling("slot" + slot + ".png");
+    }
+
+    /**
+     * 删除槽位的存档与缩略图。
+     *
+     * @param slot 槽位号
+     * @return 操作结果
+     */
+    public SaveError deleteState(int slot) {
+        try {
+            states.delete(slot);
+            Files.deleteIfExists(thumbnailFile(slot));
+            return SaveError.OK;
+        } catch (IOException e) {
+            return SaveError.FILE_ERROR;
+        }
     }
 
     /**

@@ -140,43 +140,51 @@ class GameVideoRenderer {
         val contentY = safeTop
         val contentH = (canvasHeight - safeTop - safeBottom).coerceAtLeast(0f)
 
-        val frame = frameSource?.acquireFrame()
-        if (frame == null) {
+        if (frameSource == null) {
             drawBackground(gc, canvasWidth, canvasHeight)
             return
         }
 
-        try {
-            lastWidth = frame.width
-            lastHeight = frame.height
-
-            // 整个画布黑底（含菜单/状态栏后面）
-            gc.fill = 0xFF1A1A2E.toInt()
-            gc.fillRect(0f, 0f, canvasWidth, canvasHeight)
-
-            if (contentH <= 0f) return
-
-            val dw: Float
-            val dh: Float
-            if (stretchToFit) {
-                dw = canvasWidth
-                dh = contentH
-            } else {
-                val scale = min(canvasWidth / frame.width, contentH / frame.height)
-                dw = frame.width * scale
-                dh = frame.height * scale
+        // 与截图（存档缩略图）共用消费者锁：帧池同一时刻只允许一个消费者
+        synchronized(frameSource.frameLock()) {
+            val frame = frameSource.acquireFrame()
+            if (frame == null) {
+                drawBackground(gc, canvasWidth, canvasHeight)
+                return
             }
-            val dx = (canvasWidth - dw) / 2f
-            val dy = contentY + (contentH - dh) / 2f
 
-            // 视频区域黑底
-            gc.fill = 0xFF000000.toInt()
-            gc.fillRect(0f, contentY, canvasWidth, contentH)
+            try {
+                lastWidth = frame.width
+                lastHeight = frame.height
 
-            val image = updateImage(gc, frame)
-            drawFrame(gc, image, frame.width, frame.height, dx, dy, dw, dh)
-        } finally {
-            frameSource.releaseFrame()
+                // 整个画布黑底（含菜单/状态栏后面）
+                gc.fill = 0xFF1A1A2E.toInt()
+                gc.fillRect(0f, 0f, canvasWidth, canvasHeight)
+
+                if (contentH <= 0f) return
+
+                val dw: Float
+                val dh: Float
+                if (stretchToFit) {
+                    dw = canvasWidth
+                    dh = contentH
+                } else {
+                    val scale = min(canvasWidth / frame.width, contentH / frame.height)
+                    dw = frame.width * scale
+                    dh = frame.height * scale
+                }
+                val dx = (canvasWidth - dw) / 2f
+                val dy = contentY + (contentH - dh) / 2f
+
+                // 视频区域黑底
+                gc.fill = 0xFF000000.toInt()
+                gc.fillRect(0f, contentY, canvasWidth, contentH)
+
+                val image = updateImage(gc, frame)
+                drawFrame(gc, image, frame.width, frame.height, dx, dy, dw, dh)
+            } finally {
+                frameSource.releaseFrame()
+            }
         }
     }
 

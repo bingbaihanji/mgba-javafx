@@ -20,6 +20,7 @@ import com.mgba.bingbaihanji.view.debug.DebugOverlay
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
 import com.mgba.bingbaihanji.view.option.CoreOptionsDialog
+import com.mgba.bingbaihanji.view.save.SaveSlotsDialog
 import com.mgba.bingbaihanji.view.settings.SettingsDialog
 import com.mgba.bingbaihanji.view.status.GameStatusBar
 import com.mgba.bingbaihanji.view.video.GameVideoRenderer
@@ -346,6 +347,17 @@ class XuanMgbaController : MenuActions {
             if (result.ok()) "已读取槽位 ${slot + 1}"
             else "读取失败：${result.description()}"
         )
+    }
+
+    override fun onOpenSaveManager() {
+        val session = saveSession
+        if (session == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        SaveSlotsDialog(rootPane.scene?.window, session) { message ->
+            statusBar.showMessage(message)
+        }.show()
     }
 
     override fun onSaveAutoState() {

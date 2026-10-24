@@ -19,6 +19,9 @@ public final class JniEmulatorCore implements EmulatorCore {
 
     private final ReentrantLock lock = new ReentrantLock();
 
+    /** 帧缓冲消费者锁（渲染与截图共用）。 */
+    private final Object frameLock = new Object();
+
     private volatile boolean closed;
 
     public JniEmulatorCore() {
@@ -174,6 +177,11 @@ public final class JniEmulatorCore implements EmulatorCore {
     public void releaseFrame() {
         checkOpen();
         NativeEmulator.nativeReleaseFrame(handle);
+    }
+
+    @Override
+    public Object frameLock() {
+        return frameLock;
     }
 
     @Override

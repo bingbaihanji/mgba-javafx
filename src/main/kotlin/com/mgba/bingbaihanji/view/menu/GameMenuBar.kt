@@ -150,6 +150,10 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                 saveSlots,
                 loadSlots,
                 SeparatorMenuItem(),
+                MenuItem("存档管理(_M)...").apply {
+                    setOnAction { actions.onOpenSaveManager() }
+                },
+                SeparatorMenuItem(),
                 MenuItem("保存到自动槽位").apply {
                     setOnAction { actions.onSaveAutoState() }
                 }
@@ -283,6 +287,9 @@ interface MenuActions {
 
     /** 保存到隐藏的自动槽位。 */
     fun onSaveAutoState()
+
+    /** 打开带缩略图的存档管理对话框。 */
+    fun onOpenSaveManager()
 
     /** 打开金手指管理对话框。 */
     fun onManageCheats()
