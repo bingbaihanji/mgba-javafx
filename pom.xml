@@ -75,9 +75,12 @@
             <classifier>win</classifier>
         </dependency>
 
-        <!-- JSON 序列化（M6）。**注解只出现在 persist/ 的 DTO 上**，model/ 的类上一个都没有
-             ——那是"模型层不依赖框架"的自然延伸，也意味着换掉 Jackson 不会碰到模型 -->
-
+        <!-- JSON 持久化：金手指列表、设置等。只在 persist 层使用，模型类不依赖注解 -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.11.0</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

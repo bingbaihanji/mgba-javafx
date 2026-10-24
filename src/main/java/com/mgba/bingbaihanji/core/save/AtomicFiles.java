@@ -13,7 +13,7 @@ import java.nio.file.StandardCopyOption;
  * 谁也读不了的残片。改名在同一文件系统上是原子的，因此要么是旧内容、
  * 要么是完整的新内容。少数文件系统不支持原子改名时退回普通覆盖。
  */
-final class AtomicFiles {
+public final class AtomicFiles {
 
     private AtomicFiles() {
     }
@@ -25,7 +25,7 @@ final class AtomicFiles {
      * @param data   完整内容
      * @throws IOException 写入或改名失败
      */
-    static void write(Path target, byte[] data) throws IOException {
+    public static void write(Path target, byte[] data) throws IOException {
         Path parent = target.getParent();
         if (parent != null) {
             Files.createDirectories(parent);

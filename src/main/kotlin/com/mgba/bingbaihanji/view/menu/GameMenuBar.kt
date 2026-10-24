@@ -58,7 +58,10 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
                     setOnAction { actions.onToggleFastForward() }
                 },
                 SeparatorMenuItem(),
-                buildSaveStateMenu()
+                buildSaveStateMenu(),
+                MenuItem("金手指(_C)...").apply {
+                    setOnAction { actions.onManageCheats() }
+                }
             )
         }
     }
@@ -167,4 +170,7 @@ interface MenuActions {
 
     /** 保存到隐藏的自动槽位。 */
     fun onSaveAutoState()
+
+    /** 打开金手指管理对话框。 */
+    fun onManageCheats()
 }

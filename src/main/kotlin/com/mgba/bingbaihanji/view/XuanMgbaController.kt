@@ -1,6 +1,7 @@
 package com.mgba.bingbaihanji.view
 
 import com.mgba.bingbaihanji.core.audio.AudioPump
+import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
 import com.mgba.bingbaihanji.core.save.GameSaveSession
@@ -9,6 +10,7 @@ import com.mgba.bingbaihanji.core.save.SaveStateStore
 import com.mgba.bingbaihanji.mgbaplatform.emulator.JniEmulatorCore
 import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
+import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.menu.GameMenuBar
 import com.mgba.bingbaihanji.view.menu.MenuActions
 import com.mgba.bingbaihanji.view.status.GameStatusBar
@@ -55,6 +57,9 @@ class XuanMgbaController : MenuActions {
     /** 存档会话（电池存档 + 即时存档）。自动存档线程会读它，因此标记 volatile。 */
     @Volatile
     private var saveSession: GameSaveSession? = null
+
+    /** 当前 ROM 的金手指服务。 */
+    private var cheatService: CheatService? = null
 
     /** 周期保存电池存档的调度器。 */
     private var autoSaveExecutor: ScheduledExecutorService? = null
@@ -188,6 +193,7 @@ class XuanMgbaController : MenuActions {
             return
         }
         runCatching { saveSession?.loadBattery() }
+        cheatService?.apply()
 
         loop?.start()
         statusBar.showMessage("已复位")
@@ -244,6 +250,15 @@ class XuanMgbaController : MenuActions {
         toggleFastForward()
     }
 
+    override fun onManageCheats() {
+        val service = cheatService
+        if (service == null) {
+            statusBar.showMessage("请先加载 ROM")
+            return
+        }
+        CheatDialog(rootPane.scene?.window, service).show()
+    }
+
     override fun onToggleMute() {
         audioSink?.setVolume(0f)
     }
@@ -296,6 +311,9 @@ class XuanMgbaController : MenuActions {
             saveSession = session
             val restoredBattery = session.loadBattery()
             startAutoSave()
+
+            // 金手指：加载该 ROM 的列表并立即应用
+            cheatService = CheatService.open(c, identity).also { it.apply() }
 
             // 音频
             val sink = SourceDataLineAudioSink(av.sampleRate)
@@ -388,6 +406,7 @@ class XuanMgbaController : MenuActions {
         audioSink = null
         core = null
         saveSession = null
+        cheatService = null
         currentRom = null
         romLoaded = false
         paused = false
