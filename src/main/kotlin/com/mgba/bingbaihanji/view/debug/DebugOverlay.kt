@@ -15,8 +15,8 @@ class DebugOverlay : VBox(2.0) {
     private val labels = LinkedHashMap<DebugCategory, Label>()
 
     init {
-        style = "-fx-background-color: rgba(0, 0, 0, 0.55); -fx-padding: 8;" +
-                " -fx-background-radius: 4;"
+        // 背景完全透明：只留文字，不遮挡游戏画面
+        style = "-fx-background-color: transparent;"
         // 调试浮层不参与鼠标事件，避免挡住视频区域的点击
         isPickOnBounds = false
         isMouseTransparent = true
@@ -26,9 +26,11 @@ class DebugOverlay : VBox(2.0) {
 
         for (category in DebugCategory.entries) {
             val label = Label().apply {
+                // 透明背景下加一层很淡的文字阴影，亮色画面上也看得清
                 style = "-fx-text-fill: ${category.color};" +
                         " -fx-font-family: 'Consolas', 'Courier New', monospace;" +
-                        " -fx-font-size: 11px;"
+                        " -fx-font-size: 11px;" +
+                        " -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.85), 2, 0.2, 1, 1);"
                 isWrapText = true
                 maxWidth = 620.0
             }
