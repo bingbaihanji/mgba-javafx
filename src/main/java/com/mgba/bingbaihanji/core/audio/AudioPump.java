@@ -18,12 +18,17 @@ public final class AudioPump {
     private static final int READ_BATCH_FRAMES = 1024;
 
     private final AudioSource source;
+
     private final AudioSink sink;
+
     private final ByteBuffer pcmBuffer;
+
     private final short[] pcmArray;
 
     private volatile boolean running;
+
     private volatile boolean paused;
+
     private Thread thread;
 
     public AudioPump(AudioSource source, AudioSink sink) {
@@ -35,7 +40,9 @@ public final class AudioPump {
 
     /** 启动音频泵。已在运行时为空操作。 */
     public void start() {
-        if (running) return;
+        if (running) {
+            return;
+        }
         running = true;
         paused = false;
         sink.start();
@@ -107,7 +114,9 @@ public final class AudioPump {
     private void discardBacklog() {
         for (int i = 0; i < 4; i++) {
             pcmBuffer.clear();
-            if (source.readAudio(pcmBuffer, READ_BATCH_FRAMES) <= 0) break;
+            if (source.readAudio(pcmBuffer, READ_BATCH_FRAMES) <= 0) {
+                break;
+            }
         }
     }
 

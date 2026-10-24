@@ -14,24 +14,28 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class EmulationLoop {
 
     private final EmulatorCore core;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     private volatile double speedMultiplier = 1.0;
+
     private volatile double targetFps = 60.0;
+
     private volatile Runnable onFrameProduced = () -> {};
+
     private Thread thread;
 
     public EmulationLoop(EmulatorCore core) {
         this.core = core;
     }
 
+    public double getSpeedMultiplier() {
+        return speedMultiplier;
+    }
+
     /** 设置倍速（0.2 ~ 16.0），1.0 = 原速。 */
     public void setSpeedMultiplier(double speed) {
         this.speedMultiplier = speed;
-    }
-
-    public double getSpeedMultiplier() {
-        return speedMultiplier;
     }
 
     /** 设置目标 FPS（通常从 AvInfo 获取）。 */
@@ -79,7 +83,11 @@ public final class EmulationLoop {
         while (running.get()) {
             if (core.runOnce() != 0) {
                 // 核心调用失败：短暂等待后重新同步时间轴
-                try { Thread.sleep(10); } catch (InterruptedException e) { return; }
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    return;
+                }
                 nextFrame = System.nanoTime();
                 continue;
             }

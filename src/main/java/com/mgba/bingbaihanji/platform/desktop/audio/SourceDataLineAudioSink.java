@@ -23,10 +23,15 @@ public final class SourceDataLineAudioSink implements AudioSink {
     private static final int WRITE_BATCH = 1024;
 
     private final float coreSampleRate;
+
     private SourceDataLine line;
+
     private float outputSampleRate;
+
     private boolean needsResample;
+
     private volatile boolean started;
+
     private volatile float volume = 1.0f;
 
     public SourceDataLineAudioSink(double coreSampleRate) {
@@ -35,7 +40,9 @@ public final class SourceDataLineAudioSink implements AudioSink {
 
     @Override
     public void start() {
-        if (started) return;
+        if (started) {
+            return;
+        }
         try {
             openLine();
             line.start();
@@ -62,7 +69,9 @@ public final class SourceDataLineAudioSink implements AudioSink {
 
     @Override
     public void write(short[] pcm, int frames) {
-        if (line == null || !started) return;
+        if (line == null || !started) {
+            return;
+        }
 
         if (needsResample) {
             writeResampled(pcm, frames);
@@ -147,15 +156,21 @@ public final class SourceDataLineAudioSink implements AudioSink {
         // 线性插值重采样
         double ratio = (double) coreSampleRate / outputSampleRate;
         int outFrames = (int) (frames / ratio);
-        if (outFrames <= 0) return;
+        if (outFrames <= 0) {
+            return;
+        }
 
         byte[] bytes = new byte[outFrames * 4];
         for (int i = 0; i < outFrames; i++) {
             double srcPos = i * ratio;
             int srcIdx = (int) srcPos;
             double frac = srcPos - srcIdx;
-            if (srcIdx >= frames - 1) srcIdx = frames - 2;
-            if (srcIdx < 0) srcIdx = 0;
+            if (srcIdx >= frames - 1) {
+                srcIdx = frames - 2;
+            }
+            if (srcIdx < 0) {
+                srcIdx = 0;
+            }
 
             for (int ch = 0; ch < 2; ch++) {
                 int s0 = pcm[srcIdx * 2 + ch];

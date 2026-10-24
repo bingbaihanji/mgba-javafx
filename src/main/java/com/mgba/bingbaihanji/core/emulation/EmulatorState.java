@@ -15,7 +15,9 @@ public enum EmulatorState {
 
     public static EmulatorState fromCode(int code) {
         for (EmulatorState s : values()) {
-            if (s.code == code) return s;
+            if (s.code == code) {
+                return s;
+            }
         }
         throw new IllegalArgumentException("未知状态码: " + code);
     }

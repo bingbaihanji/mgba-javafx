@@ -27,8 +27,8 @@ public final class NativeEmulator {
     /** 加载 mgba_frontend.dll：优先从已知相对路径加载，找不到再走 java.library.path。 */
     private static void loadLibrary() {
         String[] candidates = {
-            "build/native/windows-x64/dist/mgba_frontend.dll",
-            "native/dist/mgba_frontend.dll"
+                "build/native/windows-x64/dist/mgba_frontend.dll",
+                "native/dist/mgba_frontend.dll"
         };
         for (String path : candidates) {
             File f = new File(path);

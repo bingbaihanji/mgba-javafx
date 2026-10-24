@@ -1,6 +1,10 @@
 package com.mgba.bingbaihanji.mgbaplatform.emulator;
 
-import com.mgba.bingbaihanji.core.emulation.*;
+import com.mgba.bingbaihanji.core.emulation.AvInfo;
+import com.mgba.bingbaihanji.core.emulation.EmulatorCore;
+import com.mgba.bingbaihanji.core.emulation.EmulatorState;
+import com.mgba.bingbaihanji.core.emulation.FrameData;
+import com.mgba.bingbaihanji.core.emulation.GbaButton;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.locks.ReentrantLock;
@@ -12,7 +16,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class JniEmulatorCore implements EmulatorCore {
 
     private final long handle;
+
     private final ReentrantLock lock = new ReentrantLock();
+
     private volatile boolean closed;
 
     public JniEmulatorCore() {
@@ -87,7 +93,9 @@ public final class JniEmulatorCore implements EmulatorCore {
 
     @Override
     public void close() {
-        if (closed) return;
+        if (closed) {
+            return;
+        }
         lock.lock();
         try {
             NativeEmulator.nativeDestroy(handle);
@@ -156,7 +164,9 @@ public final class JniEmulatorCore implements EmulatorCore {
         checkOpen();
         long[] meta = new long[4];
         ByteBuffer buf = NativeEmulator.nativeAcquireFrame(handle, meta);
-        if (buf == null) return null;
+        if (buf == null) {
+            return null;
+        }
         return new FrameData(buf, (int) meta[0], (int) meta[1], (int) meta[2], meta[3]);
     }
 

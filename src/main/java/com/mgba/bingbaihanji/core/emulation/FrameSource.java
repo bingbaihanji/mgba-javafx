@@ -1,7 +1,5 @@
 package com.mgba.bingbaihanji.core.emulation;
 
-import java.nio.ByteBuffer;
-
 /** 视频帧来源，由渲染线程消费。 */
 public interface FrameSource {
 
