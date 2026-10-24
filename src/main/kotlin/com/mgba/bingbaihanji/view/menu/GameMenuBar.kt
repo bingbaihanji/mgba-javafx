@@ -114,6 +114,8 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         val saveSlots = Menu("保存到槽位").apply {
             for (slot in 1..SAVE_SLOT_COUNT) {
                 items.add(MenuItem("槽位 $slot").apply {
+                    // 传统映射：F1–F10 读取，Shift+F1–F10 保存
+                    accelerator = KeyCombination.valueOf("Shift+F$slot")
                     setOnAction { actions.onSaveState(slot - 1) }
                 })
             }
@@ -121,6 +123,7 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         val loadSlots = Menu("读取槽位").apply {
             for (slot in 1..SAVE_SLOT_COUNT) {
                 items.add(MenuItem("槽位 $slot").apply {
+                    accelerator = KeyCombination.valueOf("F$slot")
                     setOnAction { actions.onLoadState(slot - 1) }
                 })
             }
