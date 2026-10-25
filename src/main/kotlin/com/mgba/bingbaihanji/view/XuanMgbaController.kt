@@ -300,7 +300,22 @@ class XuanMgbaController : MenuActions {
             }
         }
         val file = chooser.showOpenDialog(rootPane.scene?.window) ?: return
+        openRom(file)
+    }
 
+    /**
+     * 打开指定 ROM（文件选择框、拖拽、命令行共用）。
+     *
+     * <p>文件不存在时只在状态栏提示，不弹对话框——调用方可能是在拖拽或启动阶段，
+     * 这两个场景都由调用方决定是否额外提示。
+     *
+     * @param file ROM 文件
+     */
+    fun openRom(file: File) {
+        if (!file.isFile) {
+            statusBar.showMessage("找不到 ROM：${file.name}", 6.0)
+            return
+        }
         file.parent?.let { parent ->
             settings.lastRomDirectory = parent
             persistSettings()
@@ -1037,13 +1052,20 @@ class XuanMgbaController : MenuActions {
          * 核心无法从压缩包里读取 ROM，选中只会得到一个加载失败。
          */
         private val ROM_FILTERS = listOf(
-            FileChooser.ExtensionFilter("GB/GBA ROM", "*.gba", "*.gbc", "*.gb", "*.agb"),
+            FileChooser.ExtensionFilter("GB/GBA ROM", *ROM_EXTENSIONS.map { "*.$it" }.toTypedArray()),
             FileChooser.ExtensionFilter("所有文件", "*.*")
         )
     }
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────
+
+/** 支持的 ROM 扩展名（小写，不含点）。 */
+private val ROM_EXTENSIONS = setOf("gba", "gbc", "gb", "agb")
+
+/** 是否为可加载的 ROM 文件：必须存在且扩展名匹配。 */
+internal fun isRomFile(file: File): Boolean =
+    file.isFile && file.extension.lowercase() in ROM_EXTENSIONS
 
 /**
  * 定位 mgba_libretro.dll。
@@ -1065,7 +1087,7 @@ internal fun findCoreDll(): File {
         ?: error("找不到 mgba_libretro.dll：打包运行时缺少解压文件，开发环境请先运行 scripts/build-native-windows.ps1")
 }
 
-/** 系统目录（BIOS 等），位于 %APPDATA%/bingbaihanji-mgba/system。 */
+/** 系统目录（BIOS 等），位于 jar 同级的 system 目录。 */
 internal fun systemDirectory(): File = AppPaths.systemDirectory().toFile()
 
 /** 弹出错误对话框（自动 dispatch 到 JavaFX 线程）。 */

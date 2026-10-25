@@ -13,7 +13,7 @@ import java.util.Arrays;
  *
  * <h2>两种位置</h2>
  * <ul>
- *   <li>应用目录：{@code %APPDATA%/…/saves/<ROM>/game.sav}（始终保存，作为本程序的副本）</li>
+ *   <li>应用目录：{@code <jar 同级>/saves/<ROM>/game.sav}（始终保存，作为本程序的副本）</li>
  *   <li>ROM 同目录：{@code <ROM>.sav}（与原版 mGBA 互通）</li>
  * </ul>
  * 加载时取两者中**较新的、长度合法**的那一个；保存时两边都写。

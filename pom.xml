@@ -13,6 +13,7 @@
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <javafx.version>17.0.6</javafx.version>
         <junit.version>5.10.3</junit.version>
+        <jackson.version>2.21.5</jackson.version>
         <xuan.version>0.1.0</xuan.version>
         <kotlin.version>2.3.0</kotlin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -77,9 +78,9 @@
 
         <!-- JSON 持久化：金手指列表、设置等。只在 persist 层使用，模型类不依赖注解 -->
         <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>2.11.0</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
 
         <dependency>

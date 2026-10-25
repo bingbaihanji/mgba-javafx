@@ -28,3 +28,14 @@ mgba-source/
 # 本地配置
 local.properties
 *.local
+
+# 运行时数据（IDE 直接运行时写到项目根目录）
+.mgba-javafx/
+settings.json
+core-options.json
+window-state.json
+keymap.json
+saves/
+system/
+screenshots/
+cheats/

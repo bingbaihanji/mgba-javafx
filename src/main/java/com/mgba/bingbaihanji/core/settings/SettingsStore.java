@@ -1,7 +1,9 @@
 package com.mgba.bingbaihanji.core.settings;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.mgba.bingbaihanji.core.save.AtomicFiles;
 import com.mgba.bingbaihanji.platform.desktop.AppPaths;
 
@@ -11,14 +13,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * 设置文件的读写（{@code %APPDATA%/bingbaihanji-mgba/settings.json}）。
+ * 设置文件的读写（程序目录下的 {@code settings.json}，即 jar 同级）。
  *
- * <p>文件缺失、损坏或字段非法时回退到默认值：设置丢了可以重新点，
- * 打不开程序不行。
+ * <p>文件缺失时写入一份默认值，损坏或字段非法时回退到默认值：
+ * 设置丢了可以重新点，打不开程序不行。
  */
 public final class SettingsStore {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
 
     private final Path file;
 
@@ -41,11 +46,17 @@ public final class SettingsStore {
      */
     public AppSettings load() {
         if (!Files.isRegularFile(file)) {
-            return new AppSettings();
+            AppSettings defaults = new AppSettings();
+            try {
+                save(defaults);
+            } catch (IOException e) {
+                System.err.println("创建设置文件失败: " + file + " — " + e.getMessage());
+            }
+            return defaults;
         }
         try {
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            AppSettings settings = GSON.fromJson(json, AppSettings.class);
+            AppSettings settings = MAPPER.readValue(json, AppSettings.class);
             return settings == null ? new AppSettings() : sanitize(settings);
         } catch (IOException | RuntimeException e) {
             System.err.println("读取设置失败: " + file + " — " + e.getMessage());
@@ -60,7 +71,7 @@ public final class SettingsStore {
      * @throws IOException 写入失败
      */
     public void save(AppSettings settings) throws IOException {
-        AtomicFiles.write(file, GSON.toJson(settings).getBytes(StandardCharsets.UTF_8));
+        AtomicFiles.write(file, MAPPER.writeValueAsString(settings).getBytes(StandardCharsets.UTF_8));
     }
 
     /** 设置文件路径。 */

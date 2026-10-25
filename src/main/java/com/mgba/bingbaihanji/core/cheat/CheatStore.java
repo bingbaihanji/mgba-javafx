@@ -1,12 +1,13 @@
 package com.mgba.bingbaihanji.core.cheat;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.mgba.bingbaihanji.core.save.AtomicFiles;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,10 +22,14 @@ import java.util.List;
  */
 public final class CheatStore {
 
-    private static final Type LIST_TYPE = new TypeToken<List<CheatEntry>>() {
-    }.getType();
+    private static final TypeReference<List<CheatEntry>> LIST_TYPE =
+            new TypeReference<>() {
+            };
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .build();
 
     private final Path file;
 
@@ -46,7 +51,7 @@ public final class CheatStore {
         }
         try {
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            List<CheatEntry> entries = GSON.fromJson(json, LIST_TYPE);
+            List<CheatEntry> entries = MAPPER.readValue(json, LIST_TYPE);
             return entries == null ? new ArrayList<>() : entries;
         } catch (IOException | RuntimeException e) {
             System.err.println("读取金手指失败: " + file + " — " + e.getMessage());
@@ -61,7 +66,7 @@ public final class CheatStore {
      * @throws IOException 写入失败
      */
     public void save(List<CheatEntry> entries) throws IOException {
-        String json = GSON.toJson(entries, LIST_TYPE);
+        String json = MAPPER.writeValueAsString(entries);
         AtomicFiles.write(file, json.getBytes(StandardCharsets.UTF_8));
     }
 

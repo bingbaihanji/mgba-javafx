@@ -1,15 +1,15 @@
 package com.mgba.bingbaihanji.platform.desktop.input;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.mgba.bingbaihanji.core.emulation.GbaButton;
 import com.mgba.bingbaihanji.core.save.AtomicFiles;
 import com.mgba.bingbaihanji.platform.desktop.AppPaths;
 import javafx.scene.input.KeyCode;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,10 +27,13 @@ import java.util.Map;
  */
 public final class KeyMapping {
 
-    private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {
-    }.getType();
+    private static final TypeReference<Map<String, String>> MAP_TYPE =
+            new TypeReference<>() {
+            };
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     /** 默认映射。 */
     private static final Map<String, String> DEFAULTS = new LinkedHashMap<>();
@@ -83,7 +86,7 @@ public final class KeyMapping {
         }
         try {
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            Map<String, String> saved = GSON.fromJson(json, MAP_TYPE);
+            Map<String, String> saved = MAPPER.readValue(json, MAP_TYPE);
             return fromSaved(saved);
         } catch (IOException | RuntimeException e) {
             System.err.println("读取按键映射失败: " + file + " — " + e.getMessage());
@@ -192,7 +195,7 @@ public final class KeyMapping {
      * @throws IOException 写入失败
      */
     public void save(Path file) throws IOException {
-        AtomicFiles.write(file, GSON.toJson(bindings, MAP_TYPE).getBytes(StandardCharsets.UTF_8));
+        AtomicFiles.write(file, MAPPER.writeValueAsString(bindings).getBytes(StandardCharsets.UTF_8));
     }
 
     private static Path defaultFile() {

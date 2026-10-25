@@ -1,13 +1,13 @@
 package com.mgba.bingbaihanji.core.option;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.mgba.bingbaihanji.core.save.AtomicFiles;
 import com.mgba.bingbaihanji.platform.desktop.AppPaths;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,10 +22,13 @@ import java.util.Map;
  */
 public final class CoreOptionsStore {
 
-    private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {
-    }.getType();
+    private static final TypeReference<Map<String, String>> MAP_TYPE =
+            new TypeReference<>() {
+            };
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     private final Path file;
 
@@ -52,7 +55,7 @@ public final class CoreOptionsStore {
         }
         try {
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            Map<String, String> options = GSON.fromJson(json, MAP_TYPE);
+            Map<String, String> options = MAPPER.readValue(json, MAP_TYPE);
             return options == null ? new HashMap<>() : options;
         } catch (IOException | RuntimeException e) {
             System.err.println("读取核心选项失败: " + file + " — " + e.getMessage());
@@ -67,7 +70,7 @@ public final class CoreOptionsStore {
      * @throws IOException 写入失败
      */
     public void save(Map<String, String> options) throws IOException {
-        AtomicFiles.write(file, GSON.toJson(options, MAP_TYPE).getBytes(StandardCharsets.UTF_8));
+        AtomicFiles.write(file, MAPPER.writeValueAsString(options).getBytes(StandardCharsets.UTF_8));
     }
 
     /** 文件路径。 */

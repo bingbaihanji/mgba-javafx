@@ -14,7 +14,7 @@ public final class CheatEntry {
 
     private boolean enabled = true;
 
-    /** Gson 反序列化用。 */
+    /** Jackson 反序列化用。 */
     public CheatEntry() {
     }
 

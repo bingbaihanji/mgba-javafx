@@ -18,7 +18,8 @@ import java.util.Map;
  *       RTC 数据（mGBA 的布局是「SRAM + RTC 结构」）；</li>
  *   <li><b>快捷存档</b>：槽位 1–9 对应 ROM 同目录的 {@code <ROM>.ss1 … .ss9}，
  *       格式是 mGBA 的 PNG 自定义块（{@code gbAs}/{@code gbAx}）；</li>
- *   <li>应用自己的 {@code %APPDATA%} 目录仍保留：自动槽位、以及旧版 MGST 存档的读取兼容。</li>
+ *   <li>应用自己的存档目录（jar 同级的 {@code saves/}）仍保留：自动槽位、
+ *       以及旧版 MGST 存档的读取兼容。</li>
  * </ul>
  *
  * <p>同一个显示名的不同 ROM 仍然按 {@code .mgba-rom} 标记区分存档目录

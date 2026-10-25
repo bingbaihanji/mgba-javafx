@@ -3,8 +3,8 @@ package com.mgba.bingbaihanji.core.settings;
 /**
  * 应用设置（持久化 DTO）。
  *
- * <p>字段是 public 的：Gson 直接按字段名映射，序列化代码里没有任何注解，
- * 模型也不依赖具体 JSON 库——换掉 Gson 只需改 {@link SettingsStore}。
+ * <p>字段是 public 的：Jackson 直接按字段名映射，序列化代码里没有任何注解，
+ * 模型也不依赖具体 JSON 库——换掉 Jackson 只需改 {@link SettingsStore}。
  */
 public final class AppSettings {
 
