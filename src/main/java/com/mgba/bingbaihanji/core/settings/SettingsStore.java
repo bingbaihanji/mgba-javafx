@@ -39,6 +39,25 @@ public final class SettingsStore {
         this.file = file;
     }
 
+    /** 把明显越界的值拉回合法范围（手改过 JSON 的情况）。 */
+    private static AppSettings sanitize(AppSettings settings) {
+        settings.gameSpeed = Math.clamp(settings.gameSpeed, 0.25, 16.0);
+        settings.soundVolume = Math.clamp(settings.soundVolume, 0, 100);
+        if (settings.shaderPreset == null) {
+            settings.shaderPreset = "OFF";
+        }
+        if (settings.customShaderPath == null) {
+            settings.customShaderPath = "";
+        }
+        if (settings.lastRomDirectory == null) {
+            settings.lastRomDirectory = "";
+        }
+        if (settings.debugSections == null) {
+            settings.debugSections = new java.util.LinkedHashMap<>();
+        }
+        return settings;
+    }
+
     /**
      * 读取设置。
      *
@@ -77,24 +96,5 @@ public final class SettingsStore {
     /** 设置文件路径。 */
     public Path file() {
         return file;
-    }
-
-    /** 把明显越界的值拉回合法范围（手改过 JSON 的情况）。 */
-    private static AppSettings sanitize(AppSettings settings) {
-        settings.gameSpeed = Math.clamp(settings.gameSpeed, 0.25, 16.0);
-        settings.soundVolume = Math.clamp(settings.soundVolume, 0, 100);
-        if (settings.shaderPreset == null) {
-            settings.shaderPreset = "OFF";
-        }
-        if (settings.customShaderPath == null) {
-            settings.customShaderPath = "";
-        }
-        if (settings.lastRomDirectory == null) {
-            settings.lastRomDirectory = "";
-        }
-        if (settings.debugSections == null) {
-            settings.debugSections = new java.util.LinkedHashMap<>();
-        }
-        return settings;
     }
 }

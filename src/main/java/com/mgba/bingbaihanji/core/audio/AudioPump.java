@@ -17,6 +17,9 @@ public final class AudioPump {
     /** 每次从音频环读取的帧数（1 帧 = 4 字节立体声 16-bit）。 */
     private static final int READ_BATCH_FRAMES = 1024;
 
+    /** 一次 flush 最多丢弃的批次数（16 × 1024 帧 = 音频环容量）。 */
+    private static final int DISCARD_BATCHES = 16;
+
     private final AudioSource source;
 
     private final AudioSink sink;
@@ -34,9 +37,6 @@ public final class AudioPump {
 
     /** 下一次循环是否丢弃积压（切换速度后避免先播放旧数据）。 */
     private volatile boolean flushRequested;
-
-    /** 一次 flush 最多丢弃的批次数（16 × 1024 帧 = 音频环容量）。 */
-    private static final int DISCARD_BATCHES = 16;
 
     private Thread thread;
 

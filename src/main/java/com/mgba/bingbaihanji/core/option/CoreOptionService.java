@@ -25,6 +25,16 @@ public final class CoreOptionService {
         this.core = core;
     }
 
+    private static int indexOfValue(CoreOption option, String wanted) {
+        List<String> values = option.values();
+        for (int i = 0; i < values.size(); i++) {
+            if (values.get(i).strip().equalsIgnoreCase(wanted.strip())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /**
      * 读取全部核心选项。
      *
@@ -100,15 +110,5 @@ public final class CoreOptionService {
             }
         }
         return applied;
-    }
-
-    private static int indexOfValue(CoreOption option, String wanted) {
-        List<String> values = option.values();
-        for (int i = 0; i < values.size(); i++) {
-            if (values.get(i).strip().equalsIgnoreCase(wanted.strip())) {
-                return i;
-            }
-        }
-        return -1;
     }
 }

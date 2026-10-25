@@ -32,6 +32,12 @@ import java.util.zip.Inflater;
  */
 public final class MegaStateFile {
 
+    /** 电池存档标签。 */
+    public static final int EXTDATA_SAVEDATA = 2;
+
+    /** RTC 标签。 */
+    public static final int EXTDATA_RTC = 4;
+
     /** PNG 文件签名。 */
     private static final byte[] PNG_SIGNATURE = {
             (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'
@@ -40,27 +46,11 @@ public final class MegaStateFile {
     /** 扩展数据标签上限（与 mGBA 的 EXTDATA_MAX 一致）。 */
     private static final int EXTDATA_MAX = 0x103;
 
-    /** 电池存档标签。 */
-    public static final int EXTDATA_SAVEDATA = 2;
-
-    /** RTC 标签。 */
-    public static final int EXTDATA_RTC = 4;
+    /** 我们在 PNG tEXt 块里记录 ROM 短 ID 用的关键字。 */
+    private static final String ROM_ID_KEYWORD = "mGBA-romId";
 
     private MegaStateFile() {
     }
-
-    /**
-     * 拆分后的状态。
-     *
-     * @param coreState 核心状态（对应 PNG 的 gbAs）
-     * @param extdata   扩展数据（tag → 原始数据）
-     * @param romId     写入时记录的 ROM 短 ID（读取旧文件时可能为 null）
-     */
-    public record Payload(byte[] coreState, Map<Integer, byte[]> extdata, String romId) {
-    }
-
-    /** 我们在 PNG tEXt 块里记录 ROM 短 ID 用的关键字。 */
-    private static final String ROM_ID_KEYWORD = "mGBA-romId";
 
     /** 文件是否是 PNG（mGBA 的即时存档）。 */
     public static boolean isPng(byte[] data) {
@@ -74,8 +64,6 @@ public final class MegaStateFile {
         }
         return true;
     }
-
-    // ── 读取 ──────────────────────────────────────────────────
 
     /**
      * 读取 mGBA PNG 存档。
@@ -119,6 +107,8 @@ public final class MegaStateFile {
         }
         return new Payload(coreState, extdata, romId);
     }
+
+    // ── 读取 ──────────────────────────────────────────────────
 
     /** 从 tEXt 块里读 ROM 短 ID；不是我们的关键字时返回原值。 */
     private static String readRomIdText(byte[] png, int start, int length, String current) {
@@ -259,8 +249,6 @@ public final class MegaStateFile {
         return -1;
     }
 
-    // ── 写入 ──────────────────────────────────────────────────
-
     /**
      * 生成 mGBA PNG 存档。
      *
@@ -319,6 +307,8 @@ public final class MegaStateFile {
         return out.toByteArray();
     }
 
+    // ── 写入 ──────────────────────────────────────────────────
+
     /** 把截图编码成 PNG 的 RGB 扫描行数据（每行前缀一个 filter=0 字节）。 */
     private static byte[] encodeImage(BufferedImage image, int width, int height) {
         ByteArrayOutputStream raw = new ByteArrayOutputStream(height * (width * 3 + 1));
@@ -338,8 +328,6 @@ public final class MegaStateFile {
         return deflate(raw.toByteArray());
     }
 
-    // ── 工具 ──────────────────────────────────────────────────
-
     private static void writeChunk(ByteArrayOutputStream out, String type, byte[] data)
             throws IOException {
         byte[] typeBytes = type.getBytes(StandardCharsets.ISO_8859_1);
@@ -356,6 +344,8 @@ public final class MegaStateFile {
         writeIntBE(crcBytes, 0, (int) crc.getValue());
         out.write(crcBytes);
     }
+
+    // ── 工具 ──────────────────────────────────────────────────
 
     private static byte[] deflate(byte[] data) {
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION);
@@ -425,5 +415,15 @@ public final class MegaStateFile {
         data[offset + 1] = (byte) (value >>> 8);
         data[offset + 2] = (byte) (value >>> 16);
         data[offset + 3] = (byte) (value >>> 24);
+    }
+
+    /**
+     * 拆分后的状态。
+     *
+     * @param coreState 核心状态（对应 PNG 的 gbAs）
+     * @param extdata   扩展数据（tag → 原始数据）
+     * @param romId     写入时记录的 ROM 短 ID（读取旧文件时可能为 null）
+     */
+    public record Payload(byte[] coreState, Map<Integer, byte[]> extdata, String romId) {
     }
 }

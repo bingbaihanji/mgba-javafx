@@ -10,13 +10,9 @@ import javafx.scene.control.Dialog
 import javafx.scene.control.Label
 import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyEvent
-import javafx.scene.layout.ColumnConstraints
-import javafx.scene.layout.GridPane
-import javafx.scene.layout.HBox
-import javafx.scene.layout.Priority
-import javafx.scene.layout.VBox
+import javafx.scene.layout.*
 import javafx.stage.Window
-import java.util.EnumMap
+import java.util.*
 
 /**
  * 按键映射对话框：点击某个动作对应的按钮，再按下一个键完成绑定。

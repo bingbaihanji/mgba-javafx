@@ -27,6 +27,13 @@ import java.util.Map;
  */
 public final class KeyMapping {
 
+    /** 参与映射的按键（GBA 没有 X/Y）。 */
+    public static final GbaButton[] MAPPABLE = {
+            GbaButton.A, GbaButton.B, GbaButton.L, GbaButton.R,
+            GbaButton.START, GbaButton.SELECT,
+            GbaButton.UP, GbaButton.DOWN, GbaButton.LEFT, GbaButton.RIGHT
+    };
+
     private static final TypeReference<Map<String, String>> MAP_TYPE =
             new TypeReference<>() {
             };
@@ -50,13 +57,6 @@ public final class KeyMapping {
         DEFAULTS.put("LEFT", "LEFT");
         DEFAULTS.put("RIGHT", "RIGHT");
     }
-
-    /** 参与映射的按键（GBA 没有 X/Y）。 */
-    public static final GbaButton[] MAPPABLE = {
-            GbaButton.A, GbaButton.B, GbaButton.L, GbaButton.R,
-            GbaButton.START, GbaButton.SELECT,
-            GbaButton.UP, GbaButton.DOWN, GbaButton.LEFT, GbaButton.RIGHT
-    };
 
     private final Map<String, String> bindings;
 
@@ -103,6 +103,22 @@ public final class KeyMapping {
             merged.put(button.name(), isValidKeyName(candidate) ? candidate : fallback);
         }
         return new KeyMapping(merged);
+    }
+
+    private static Path defaultFile() {
+        return AppPaths.configDirectory().resolve("keymap.json");
+    }
+
+    private static boolean isValidKeyName(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        try {
+            KeyCode.valueOf(name);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /** 复制一份（对话框编辑用，取消时不影响当前映射）。 */
@@ -196,21 +212,5 @@ public final class KeyMapping {
      */
     public void save(Path file) throws IOException {
         AtomicFiles.write(file, MAPPER.writeValueAsString(bindings).getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static Path defaultFile() {
-        return AppPaths.configDirectory().resolve("keymap.json");
-    }
-
-    private static boolean isValidKeyName(String name) {
-        if (name == null || name.isBlank()) {
-            return false;
-        }
-        try {
-            KeyCode.valueOf(name);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

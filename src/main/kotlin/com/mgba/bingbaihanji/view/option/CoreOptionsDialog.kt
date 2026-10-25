@@ -4,11 +4,7 @@ import com.mgba.bingbaihanji.core.option.CoreOption
 import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
-import javafx.scene.control.ButtonType
-import javafx.scene.control.ComboBox
-import javafx.scene.control.Dialog
-import javafx.scene.control.Label
-import javafx.scene.control.ScrollPane
+import javafx.scene.control.*
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.Priority

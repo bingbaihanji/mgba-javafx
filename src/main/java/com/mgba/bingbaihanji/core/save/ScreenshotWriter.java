@@ -3,6 +3,7 @@ package com.mgba.bingbaihanji.core.save;
 import com.mgba.bingbaihanji.core.emulation.EmulatorCore;
 import com.mgba.bingbaihanji.core.emulation.FrameData;
 
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -14,8 +15,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-import javax.imageio.ImageIO;
-
 /**
  * 从核心的当前帧生成存档缩略图，并原子写成 PNG。
  *
@@ -25,6 +24,10 @@ import javax.imageio.ImageIO;
  * <p>像素格式与视频管线一致：0=0RGB1555、1=XRGB8888、2=RGB565，小端字节序。
  */
 public final class ScreenshotWriter {
+
+    /** 截图文件名里的时间戳格式（毫秒也带上，连按不会互相覆盖）。 */
+    private static final DateTimeFormatter FILE_STAMP =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     private ScreenshotWriter() {
     }
@@ -93,10 +96,6 @@ public final class ScreenshotWriter {
             core.releaseFrame();
         }
     }
-
-    /** 截图文件名里的时间戳格式（毫秒也带上，连按不会互相覆盖）。 */
-    private static final DateTimeFormatter FILE_STAMP =
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
 
     /**
      * 截图并保存为 PNG。

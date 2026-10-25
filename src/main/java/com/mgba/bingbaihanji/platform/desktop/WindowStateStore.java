@@ -40,6 +40,28 @@ public final class WindowStateStore {
         this.file = file;
     }
 
+    /** 手改过的 JSON 可能给出负数或 NaN，拉回合法范围。 */
+    private static WindowState sanitize(WindowState state) {
+        WindowState result = state == null ? new WindowState() : state;
+        if (!isValidSize(result.width)) {
+            result.width = WindowState.DEFAULT_WIDTH;
+        }
+        if (!isValidSize(result.height)) {
+            result.height = WindowState.DEFAULT_HEIGHT;
+        }
+        if (result.x != null && !Double.isFinite(result.x)) {
+            result.x = null;
+        }
+        if (result.y != null && !Double.isFinite(result.y)) {
+            result.y = null;
+        }
+        return result;
+    }
+
+    private static boolean isValidSize(double value) {
+        return Double.isFinite(value) && value > 0;
+    }
+
     /**
      * 读取窗口状态；文件不存在或无法解析时创建默认文件。
      *
@@ -84,27 +106,5 @@ public final class WindowStateStore {
         } catch (IOException e) {
             System.err.println("写入窗口状态失败: " + file + " — " + e.getMessage());
         }
-    }
-
-    /** 手改过的 JSON 可能给出负数或 NaN，拉回合法范围。 */
-    private static WindowState sanitize(WindowState state) {
-        WindowState result = state == null ? new WindowState() : state;
-        if (!isValidSize(result.width)) {
-            result.width = WindowState.DEFAULT_WIDTH;
-        }
-        if (!isValidSize(result.height)) {
-            result.height = WindowState.DEFAULT_HEIGHT;
-        }
-        if (result.x != null && !Double.isFinite(result.x)) {
-            result.x = null;
-        }
-        if (result.y != null && !Double.isFinite(result.y)) {
-            result.y = null;
-        }
-        return result;
-    }
-
-    private static boolean isValidSize(double value) {
-        return Double.isFinite(value) && value > 0;
     }
 }

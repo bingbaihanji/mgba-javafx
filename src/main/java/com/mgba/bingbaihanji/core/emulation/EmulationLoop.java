@@ -51,6 +51,11 @@ public final class EmulationLoop {
         this.targetFps = fps;
     }
 
+    /** 当前音频同步微调系数。 */
+    public double getAudioCorrection() {
+        return audioCorrection;
+    }
+
     /**
      * 设置音频同步微调系数。
      *
@@ -58,11 +63,6 @@ public final class EmulationLoop {
      */
     public void setAudioCorrection(double correction) {
         this.audioCorrection = Math.max(0.95, Math.min(1.05, correction));
-    }
-
-    /** 当前音频同步微调系数。 */
-    public double getAudioCorrection() {
-        return audioCorrection;
     }
 
     /** 注册每帧完成后的回调（用于通知渲染层重绘）。 */

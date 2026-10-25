@@ -1,5 +1,6 @@
 package com.mgba.bingbaihanji.view
 
+import com.bingbaihanji.xuan.renderer.Gc
 import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.audio.AudioSync
 import com.mgba.bingbaihanji.core.cheat.CheatService
@@ -18,6 +19,7 @@ import com.mgba.bingbaihanji.platform.desktop.AppPaths
 import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
 import com.mgba.bingbaihanji.platform.desktop.input.KeyMapping
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
+import com.mgba.bingbaihanji.view.XuanMgbaController.Companion.FAST_FORWARD_SPEED
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.debug.DebugCategory
 import com.mgba.bingbaihanji.view.debug.DebugOverlay
@@ -30,7 +32,6 @@ import com.mgba.bingbaihanji.view.settings.SettingsDialog
 import com.mgba.bingbaihanji.view.status.GameStatusBar
 import com.mgba.bingbaihanji.view.theme.UiTheme
 import com.mgba.bingbaihanji.view.video.GameVideoRenderer
-import com.bingbaihanji.xuan.renderer.Gc
 import javafx.animation.KeyFrame
 import javafx.animation.Timeline
 import javafx.application.Platform
@@ -644,19 +645,19 @@ class XuanMgbaController : MenuActions {
             val av = current.avInfo()
             values[DebugCategory.AUDIO] =
                 "音频  ${av.sampleRate.toInt()} Hz   队列 ${current.audioQueued()}\n" +
-                "欠载 ${current.audioUnderruns()}   溢出 ${current.audioOverflows()}" +
-                "   音量 ${(volume * 100).toInt()}%"
+                        "欠载 ${current.audioUnderruns()}   溢出 ${current.audioOverflows()}" +
+                        "   音量 ${(volume * 100).toInt()}%"
 
             val usedSlots = (0 until SaveStateStore.SLOT_COUNT)
                 .count { saveSession?.hasState(it) == true }
             values[DebugCategory.SAVE] =
                 "存档  电池 ${current.sramSize()} B" +
-                (if (current.rtcSize() > 0) "   RTC ${current.rtcSize()} B" else "") +
-                "\n槽位  $usedSlots/${SaveStateStore.SLOT_COUNT} 有存档"
+                        (if (current.rtcSize() > 0) "   RTC ${current.rtcSize()} B" else "") +
+                        "\n槽位  $usedSlots/${SaveStateStore.SLOT_COUNT} 有存档"
 
             values[DebugCategory.CORE] =
                 "核心  ${current.coreName()} ${current.coreVersion()}\n" +
-                "核心 FPS  %.2f".format(av.fps)
+                        "核心 FPS  %.2f".format(av.fps)
         }
 
         currentRom?.let { rom ->
@@ -665,8 +666,8 @@ class XuanMgbaController : MenuActions {
 
         values[DebugCategory.SYSTEM] =
             "系统  ${System.getProperty("os.name")} ${System.getProperty("os.arch")}\n" +
-            "Java  ${System.getProperty("java.version")}" +
-            "   JavaFX ${System.getProperty("javafx.version") ?: "-"}"
+                    "Java  ${System.getProperty("java.version")}" +
+                    "   JavaFX ${System.getProperty("javafx.version") ?: "-"}"
 
         val runtime = Runtime.getRuntime()
         val usedMb = (runtime.totalMemory() - runtime.freeMemory()).shr(20)
