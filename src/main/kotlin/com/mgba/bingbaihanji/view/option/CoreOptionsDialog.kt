@@ -35,7 +35,10 @@ class CoreOptionsDialog(
             vgap = 10.0
             padding = Insets(8.0)
             columnConstraints.addAll(
-                ColumnConstraints().apply { minWidth = 160.0 },
+                ColumnConstraints().apply {
+                    minWidth = 240.0
+                    prefWidth = 320.0
+                },
                 ColumnConstraints().apply {
                     hgrow = Priority.ALWAYS
                     prefWidth = 240.0
@@ -44,19 +47,26 @@ class CoreOptionsDialog(
         }
 
         options.forEachIndexed { row, option ->
-            val box = ComboBox(FXCollections.observableArrayList(option.values())).apply {
+            // 下拉框显示中文，但选中下标仍对应核心的原始值，回传时不受影响
+            val labels = option.values().map { CoreOptionLabels.valueLabel(option.key(), it) }
+            val box = ComboBox(FXCollections.observableArrayList(labels)).apply {
                 selectionModel.select(option.current().coerceIn(0, (option.values().size - 1).coerceAtLeast(0)))
                 prefWidth = 240.0
             }
             boxes[option.index()] = box
-            grid.add(Label(option.displayName()), 0, row)
+            val label = Label(CoreOptionLabels.optionName(option)).apply {
+                // 英文名后面带中文注释后可能很长，换行而不是把对话框撑宽
+                isWrapText = true
+                maxWidth = 320.0
+            }
+            grid.add(label, 0, row)
             grid.add(box, 1, row)
         }
 
         val scroll = ScrollPane(grid).apply {
             isFitToWidth = true
             prefViewportHeight = 360.0
-            prefViewportWidth = 440.0
+            prefViewportWidth = 600.0
         }
 
         val hint = Label("部分选项（如 GB 机型）需要重新打开 ROM 才会完全生效").apply {
@@ -70,7 +80,7 @@ class CoreOptionsDialog(
             headerText = "核心提供的可调参数"
             dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
             dialogPane.content = javafx.scene.layout.VBox(8.0, scroll, hint).apply { padding = Insets(4.0) }
-            dialogPane.prefWidth = 580.0
+            dialogPane.prefWidth = 700.0
         }
         UiTheme.applyDialog(dialog, UiTheme.ICON_SETTINGS)
 
