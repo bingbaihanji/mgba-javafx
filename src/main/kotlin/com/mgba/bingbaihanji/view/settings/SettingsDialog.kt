@@ -2,14 +2,18 @@ package com.mgba.bingbaihanji.view.settings
 
 import com.mgba.bingbaihanji.core.settings.AppSettings
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
+import javafx.geometry.Pos
+import javafx.scene.Node
 import javafx.scene.control.ButtonType
 import javafx.scene.control.CheckBox
 import javafx.scene.control.ComboBox
 import javafx.scene.control.Dialog
 import javafx.scene.control.Label
 import javafx.scene.control.Slider
+import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
@@ -42,10 +46,13 @@ class SettingsDialog(
         blockIncrement = 5.0
         majorTickUnit = 25.0
         isShowTickMarks = true
-        prefWidth = 240.0
+        prefWidth = 280.0
+        maxWidth = Double.MAX_VALUE
     }
 
-    private val volumeLabel = Label("${current.soundVolume}%")
+    private val volumeLabel = Label("${current.soundVolume}%").apply {
+        minWidth = 42.0
+    }
 
     private val soundCheck = CheckBox("启用声音").apply { isSelected = current.enableSound }
 
@@ -87,44 +94,64 @@ class SettingsDialog(
     /** 打开对话框（阻塞到用户关闭）。 */
     fun show() {
         val grid = GridPane().apply {
-            hgap = 12.0
-            vgap = 12.0
-            padding = Insets(8.0)
-            add(Label("模拟倍速"), 0, 0)
-            add(speedBox, 1, 0)
-            add(Label("音量"), 0, 1)
-            add(HBox(8.0, volumeSlider, volumeLabel), 1, 1)
-            add(Label("声音"), 0, 2)
-            add(soundCheck, 1, 2)
-            add(Label("显示"), 0, 3)
-            add(stretchCheck, 1, 3)
-            add(Label("过滤"), 0, 4)
-            add(linearCheck, 1, 4)
-            add(Label("缩放"), 0, 5)
-            add(integerCheck, 1, 5)
-            add(Label("着色器"), 0, 6)
-            add(shaderBox, 1, 6)
-            add(Label("存档"), 0, 7)
-            add(autoSaveCheck, 1, 7)
-            add(Label("调试"), 0, 8)
-            add(debugCheck, 1, 8)
+            hgap = 14.0
+            vgap = 8.0
+            padding = Insets(4.0)
             columnConstraints.addAll(
-                javafx.scene.layout.ColumnConstraints().apply { minWidth = 72.0 },
-                javafx.scene.layout.ColumnConstraints().apply {
+                ColumnConstraints().apply { minWidth = 88.0 },
+                ColumnConstraints().apply {
                     hgrow = Priority.ALWAYS
-                    prefWidth = 300.0
+                    prefWidth = 320.0
                 }
             )
         }
 
-        val result = Dialog<ButtonType>().apply {
+        // 按功能分组，避免一长串选项从上排到下
+        var row = 0
+        fun section(text: String) {
+            grid.add(Label(text).apply { styleClass.add("section-title") }, 0, row++, 2, 1)
+        }
+
+        fun field(text: String, node: Node) {
+            grid.add(Label(text).apply { styleClass.add("field-label") }, 0, row)
+            grid.add(node, 1, row)
+            row++
+        }
+
+        section("模拟")
+        field("倍速", speedBox)
+
+        section("音频")
+        field(
+            "音量",
+            HBox(8.0, volumeSlider, volumeLabel).apply {
+                alignment = Pos.CENTER_LEFT
+                HBox.setHgrow(volumeSlider, Priority.ALWAYS)
+            }
+        )
+        field("声音", soundCheck)
+
+        section("画面")
+        field("显示", stretchCheck)
+        field("过滤", linearCheck)
+        field("缩放", integerCheck)
+        field("着色器", shaderBox)
+
+        section("存档与调试")
+        field("存档", autoSaveCheck)
+        field("调试", debugCheck)
+
+        val dialog = Dialog<ButtonType>().apply {
             initOwner(owner)
             title = "设置"
+            headerText = "调整模拟速度、声音与画面显示"
             dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
             dialogPane.content = grid
-            dialogPane.prefWidth = 460.0
-        }.showAndWait().orElse(ButtonType.CANCEL)
+            dialogPane.prefWidth = 520.0
+        }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_SETTINGS)
 
+        val result = dialog.showAndWait().orElse(ButtonType.CANCEL)
         if (result != ButtonType.OK) {
             return
         }

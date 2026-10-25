@@ -2,6 +2,7 @@ package com.mgba.bingbaihanji.view.input
 
 import com.mgba.bingbaihanji.core.emulation.GbaButton
 import com.mgba.bingbaihanji.platform.desktop.input.KeyMapping
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.geometry.Insets
 import javafx.scene.control.Button
 import javafx.scene.control.ButtonType
@@ -37,7 +38,7 @@ class KeyMappingDialog(
     private val keyButtons = EnumMap<GbaButton, Button>(GbaButton::class.java)
 
     private val message = Label().apply {
-        style = "-fx-text-fill: #D97A7A; -fx-font-size: 11px;"
+        styleClass.add("error-label")
     }
 
     /** 打开对话框（阻塞到用户关闭）。 */
@@ -73,9 +74,10 @@ class KeyMappingDialog(
                 refreshButtons()
             }
         }
-        val hint = Label("F1–F12、空格与 Esc 已被程序快捷键占用；Esc 同时用于取消本次更改")
-        hint.style = "-fx-text-fill: #888888; -fx-font-size: 11px;"
-        hint.isWrapText = true
+        val hint = Label("F1–F12、空格与 Esc 已被程序快捷键占用；Esc 同时用于取消本次更改").apply {
+            styleClass.add("hint-label")
+            isWrapText = true
+        }
 
         val content = VBox(10.0, grid, HBox(12.0, reset, hint), message).apply {
             padding = Insets(6.0)
@@ -87,8 +89,9 @@ class KeyMappingDialog(
             headerText = "点击右侧按钮后按下新键"
             dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
             dialogPane.content = content
-            dialogPane.prefWidth = 520.0
+            dialogPane.prefWidth = 540.0
         }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_APP)
 
         // 捕获阶段拦截按键：捕获期间不会触发按钮自身的空格/回车激活
         dialog.dialogPane.addEventFilter(KeyEvent.KEY_PRESSED) { event -> handleKey(event) }

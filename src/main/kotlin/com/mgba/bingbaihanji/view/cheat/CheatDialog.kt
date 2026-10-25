@@ -4,6 +4,7 @@ import com.mgba.bingbaihanji.core.cheat.CheatCodeParser
 import com.mgba.bingbaihanji.core.cheat.CheatEntry
 import com.mgba.bingbaihanji.core.cheat.CheatFormatException
 import com.mgba.bingbaihanji.core.cheat.CheatService
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.scene.control.Alert
@@ -55,8 +56,9 @@ class CheatDialog(
                 persistAndApply()
             }
         }
-        val hint = Label("支持 GameShark / CodeBreaker / Raw；多行代码作为一组生效")
-        hint.style = "-fx-text-fill: #888888; -fx-font-size: 11px;"
+        val hint = Label("支持 GameShark / CodeBreaker / Raw；多行代码作为一组生效").apply {
+            styleClass.add("hint-label")
+        }
 
         val buttons = HBox(8.0, addButton, removeButton)
 
@@ -64,15 +66,16 @@ class CheatDialog(
             padding = Insets(4.0)
         }
 
-        Dialog<ButtonType>().apply {
+        val dialog = Dialog<ButtonType>().apply {
             initOwner(owner)
             title = "金手指"
             headerText = "金手指（修改后自动保存并立即生效）"
             dialogPane.buttonTypes.add(ButtonType.CLOSE)
             dialogPane.content = root
             dialogPane.prefWidth = 680.0
-            showAndWait()
         }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_APP)
+        dialog.showAndWait()
 
         // 关闭时再兜底保存一次，防止最后一步切换开关没落盘
         persistAndApply()
@@ -102,14 +105,17 @@ class CheatDialog(
             )
         }
 
-        val result = Dialog<ButtonType>().apply {
+        val dialog = Dialog<ButtonType>().apply {
             initOwner(owner)
             title = "添加金手指"
+            headerText = "新增一条金手指"
             dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
             dialogPane.content = grid
-            dialogPane.prefWidth = 480.0
-        }.showAndWait().orElse(ButtonType.CANCEL)
+            dialogPane.prefWidth = 500.0
+        }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_APP)
 
+        val result = dialog.showAndWait().orElse(ButtonType.CANCEL)
         if (result != ButtonType.OK) {
             return
         }
@@ -119,12 +125,14 @@ class CheatDialog(
             items.add(entry)
             persistAndApply()
         } catch (e: CheatFormatException) {
-            Alert(Alert.AlertType.ERROR).apply {
+            val alert = Alert(Alert.AlertType.ERROR).apply {
                 initOwner(owner)
                 title = "格式错误"
                 headerText = "金手指格式错误"
                 contentText = e.message
-            }.showAndWait()
+            }
+            UiTheme.applyAlert(alert)
+            alert.showAndWait()
         }
     }
 
@@ -150,8 +158,8 @@ class CheatDialog(
         )
 
         init {
-            codeLabel.style = "-fx-text-fill: #888888; -fx-font-size: 11px;"
-            typeLabel.style = "-fx-text-fill: #4A90D9; -fx-font-size: 11px;"
+            codeLabel.styleClass.add("cell-subtitle")
+            typeLabel.styleClass.add("cell-badge")
             HBox.setHgrow(spacer, Priority.ALWAYS)
             box.padding = Insets(4.0, 8.0, 4.0, 8.0)
             check.setOnAction {

@@ -1,0 +1,393 @@
+/*
+ * 统一的浅灰界面主题。
+ *
+ * JavaFX 对话框的窗口标题栏由系统绘制（白色），对话框内容再用深色会很割裂，
+ * 所以这里用不同深浅的灰色分层：标题区、正文、按钮区、输入控件各差一档，
+ * 既和白色标题栏衔接，又有层次感。
+ *
+ * .app-dialog 由 UiTheme 加到每个 DialogPane 上；.start-placeholder 是
+ * 未加载 ROM 时的占位页（位于深色 GL 画面上，仍保留浅色文字）。
+ */
+
+/* ── 对话框基础 ─────────────────────────────────────────── */
+
+.app-dialog {
+    -fx-background-color: #F4F5F7;
+    -fx-background: #F4F5F7;
+    -fx-base: #E9ECF0;
+    -fx-accent: #4A90D9;
+    -fx-focus-color: #4A90D9;
+    -fx-faint-focus-color: rgba(74, 144, 217, 0.18);
+    -fx-control-inner-background: #FFFFFF;
+    -fx-text-background-color: #2B3038;
+    -fx-text-fill: #2B3038;
+    -fx-font-size: 13px;
+}
+
+/* 标题区比正文略深，形成第一层 */
+.app-dialog > .header-panel {
+    -fx-background-color: linear-gradient(to bottom, #EAEDF2, #E3E7ED);
+    -fx-padding: 14 18 14 18;
+    -fx-border-color: transparent transparent #D5DAE1 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.app-dialog > .header-panel > .label {
+    -fx-text-fill: #1F2530;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.app-dialog > .content {
+    -fx-padding: 14 18 8 18;
+}
+
+/* 按钮区再深半档，收住整个对话框 */
+.app-dialog > .button-bar > .container {
+    -fx-background-color: #EAEDF1;
+    -fx-padding: 10 18 14 18;
+    -fx-border-color: #D5DAE1 transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+/* ── 文本 ───────────────────────────────────────────────── */
+
+.app-dialog .label {
+    -fx-text-fill: #2B3038;
+}
+
+.app-dialog .hint-label {
+    -fx-text-fill: #6B7280;
+    -fx-font-size: 11px;
+}
+
+.app-dialog .error-label {
+    -fx-text-fill: #B03A3A;
+    -fx-font-size: 11px;
+}
+
+.app-dialog .section-title {
+    -fx-text-fill: #2E6FB7;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 0 2 0;
+}
+
+.app-dialog .field-label {
+    -fx-text-fill: #4A5260;
+}
+
+.app-dialog .repo-name {
+    -fx-text-fill: #3A4250;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.app-dialog .hyper-link,
+.app-dialog .hyperlink {
+    -fx-text-fill: #1F6FD0;
+    -fx-border-color: transparent;
+    -fx-underline: false;
+    -fx-padding: 2 0 2 0;
+}
+
+.app-dialog .hyper-link:hover,
+.app-dialog .hyperlink:hover {
+    -fx-text-fill: #0F5AB5;
+    -fx-underline: true;
+}
+
+/* ── 按钮 ───────────────────────────────────────────────── */
+
+.app-dialog .button {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 6;
+    -fx-border-color: #C9D0D9;
+    -fx-border-radius: 6;
+    -fx-text-fill: #2B3038;
+    -fx-padding: 6 18 6 18;
+    -fx-cursor: hand;
+}
+
+.app-dialog .button:hover {
+    -fx-background-color: #F0F3F7;
+    -fx-border-color: #B6BFCA;
+}
+
+.app-dialog .button:pressed {
+    -fx-background-color: #E2E7ED;
+}
+
+.app-dialog .button:default {
+    -fx-background-color: #4A90D9;
+    -fx-border-color: #3C7BBF;
+    -fx-text-fill: white;
+}
+
+.app-dialog .button:default:hover {
+    -fx-background-color: #5C9EE2;
+    -fx-border-color: #3C7BBF;
+}
+
+.app-dialog .button:default:pressed {
+    -fx-background-color: #3C7BBF;
+}
+
+.app-dialog .button:disabled {
+    -fx-opacity: 0.45;
+    -fx-cursor: default;
+}
+
+/* 列表行内的小按钮，避免把一行撑得过宽 */
+.app-dialog .slot-action {
+    -fx-padding: 5 12 5 12;
+    -fx-font-size: 12px;
+}
+
+.app-dialog .button.danger {
+    -fx-background-color: #FDF2F2;
+    -fx-border-color: #E3B4B4;
+    -fx-text-fill: #B03A3A;
+}
+
+.app-dialog .button.danger:hover {
+    -fx-background-color: #FBE6E6;
+    -fx-border-color: #D99494;
+}
+
+/* ── 输入控件 ───────────────────────────────────────────── */
+
+.app-dialog .text-field,
+.app-dialog .text-area {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #2B3038;
+    -fx-prompt-text-fill: #9AA1AC;
+    -fx-highlight-fill: #C7DDF5;
+    -fx-highlight-text-fill: #1F2530;
+    -fx-background-radius: 6;
+    -fx-border-color: #C9D0D9;
+    -fx-border-radius: 6;
+}
+
+.app-dialog .text-area .content {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 6;
+}
+
+.app-dialog .combo-box,
+.app-dialog .combo-box-base {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 6;
+    -fx-border-color: #C9D0D9;
+    -fx-border-radius: 6;
+}
+
+.app-dialog .combo-box .list-cell,
+.app-dialog .combo-box-base .list-cell {
+    -fx-text-fill: #2B3038;
+    -fx-background-color: transparent;
+}
+
+.app-dialog .combo-box .arrow,
+.app-dialog .combo-box-base .arrow {
+    -fx-background-color: #5A6472;
+}
+
+.app-dialog .combo-box-popup .list-view {
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #C9D0D9;
+    -fx-effect: dropshadow(gaussian, rgba(31, 37, 48, 0.18), 12, 0.2, 0, 4);
+}
+
+.app-dialog .combo-box-popup .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #2B3038;
+    -fx-padding: 6 10 6 10;
+}
+
+.app-dialog .combo-box-popup .list-cell:filled:hover {
+    -fx-background-color: #EEF3F9;
+}
+
+.app-dialog .combo-box-popup .list-cell:filled:selected {
+    -fx-background-color: #D8E7F8;
+    -fx-text-fill: #1F4F82;
+}
+
+/* ── 复选框与滑块 ───────────────────────────────────────── */
+
+.app-dialog .check-box {
+    -fx-text-fill: #2B3038;
+}
+
+.app-dialog .check-box > .box {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 4;
+    -fx-border-color: #B9C1CC;
+    -fx-border-radius: 4;
+}
+
+.app-dialog .check-box:selected > .box {
+    -fx-background-color: #4A90D9;
+    -fx-border-color: #3C7BBF;
+}
+
+.app-dialog .check-box:selected > .box > .mark {
+    -fx-background-color: white;
+}
+
+.app-dialog .slider .track {
+    -fx-background-color: #D5DAE2;
+    -fx-background-radius: 3;
+    -fx-pref-height: 5;
+}
+
+.app-dialog .slider .thumb {
+    -fx-background-color: #4A90D9;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 217, 0.35), 6, 0.2, 0, 1);
+}
+
+.app-dialog .slider .axis {
+    -fx-tick-label-fill: #6B7280;
+}
+
+/* ── 列表与滚动容器 ─────────────────────────────────────── */
+
+.app-dialog .list-view {
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #D5DAE1;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 4;
+}
+
+.app-dialog .list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #2B3038;
+    -fx-padding: 4 8 4 8;
+}
+
+.app-dialog .list-view .list-cell:filled:hover {
+    -fx-background-color: #F1F4F8;
+}
+
+.app-dialog .list-view .list-cell:filled:selected {
+    -fx-background-color: #D8E7F8;
+    -fx-text-fill: #1F4F82;
+}
+
+.app-dialog .list-view .placeholder .label {
+    -fx-text-fill: #8A919C;
+}
+
+.app-dialog .scroll-pane,
+.app-dialog .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.app-dialog .scroll-pane {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.app-dialog .scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.app-dialog .scroll-bar .thumb {
+    -fx-background-color: #C3CAD4;
+    -fx-background-radius: 4;
+}
+
+.app-dialog .scroll-bar .thumb:hover {
+    -fx-background-color: #AAB3C0;
+}
+
+.app-dialog .scroll-bar .increment-button,
+.app-dialog .scroll-bar .decrement-button {
+    -fx-opacity: 0;
+    -fx-padding: 0;
+}
+
+.app-dialog .scroll-bar .increment-arrow,
+.app-dialog .scroll-bar .decrement-arrow {
+    -fx-shape: " ";
+    -fx-padding: 0;
+}
+
+/* ── 分隔线 ─────────────────────────────────────────────── */
+
+.app-dialog .separator:horizontal .line {
+    -fx-border-color: #DFE3E9 transparent transparent transparent;
+}
+
+/* ── 存档槽位 ───────────────────────────────────────────── */
+
+.app-dialog .slot-preview {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 6;
+    -fx-border-color: #D5DAE1;
+    -fx-border-radius: 6;
+}
+
+.app-dialog .cell-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1F2530;
+}
+
+.app-dialog .cell-time {
+    -fx-text-fill: #6B7280;
+    -fx-font-size: 11px;
+}
+
+.app-dialog .cell-subtitle {
+    -fx-text-fill: #6B7280;
+    -fx-font-size: 11px;
+}
+
+.app-dialog .cell-badge {
+    -fx-text-fill: #2E6FB7;
+    -fx-font-size: 11px;
+}
+
+/* ── 启动占位页（深色 GL 画面上，保留浅色文字）───────────── */
+
+.start-placeholder {
+    -fx-background-color: radial-gradient(
+        center 50% 44%,
+        radius 46%,
+        rgba(74, 144, 217, 0.16),
+        rgba(26, 26, 46, 0) 100%
+    );
+}
+
+.placeholder-title {
+    -fx-text-fill: #F2F2F8;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.placeholder-hint {
+    -fx-text-fill: #9494AE;
+    -fx-font-size: 13px;
+}
+
+.placeholder-button {
+    -fx-background-color: #4A90D9;
+    -fx-background-radius: 8;
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 9 28 9 28;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(74, 144, 217, 0.45), 14, 0.18, 0, 3);
+}
+
+.placeholder-button:hover {
+    -fx-background-color: #5C9EE2;
+}
+
+.placeholder-button:pressed {
+    -fx-background-color: #3C7BBF;
+}

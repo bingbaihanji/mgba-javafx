@@ -28,6 +28,7 @@ import com.mgba.bingbaihanji.view.option.CoreOptionsDialog
 import com.mgba.bingbaihanji.view.save.SaveSlotsDialog
 import com.mgba.bingbaihanji.view.settings.SettingsDialog
 import com.mgba.bingbaihanji.view.status.GameStatusBar
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import com.mgba.bingbaihanji.view.video.GameVideoRenderer
 import com.bingbaihanji.xuan.renderer.Gc
 import javafx.animation.KeyFrame
@@ -71,6 +72,9 @@ class XuanMgbaController : MenuActions {
 
     /** 调试信息浮层。 */
     private val debugOverlay = DebugOverlay()
+
+    /** 未加载 ROM 时的占位页（logo + 打开按钮）。 */
+    private val placeholder = StartPlaceholder { onOpenRom() }
 
     // ── 模拟器状态 ────────────────────────────────────────────
     private var core: JniEmulatorCore? = null
@@ -146,7 +150,7 @@ class XuanMgbaController : MenuActions {
         rootPane.top = menuBar
         rootPane.bottom = statusBar
         // center 留空，让底层 GL 画布透出
-        centerStack.children.add(debugOverlay)
+        centerStack.children.addAll(placeholder, debugOverlay)
         StackPane.setAlignment(debugOverlay, Pos.TOP_LEFT)
         StackPane.setMargin(debugOverlay, Insets(8.0))
         rootPane.center = centerStack
@@ -360,6 +364,7 @@ class XuanMgbaController : MenuActions {
             // 卸载成功但重新加载失败：已经没有可运行的游戏，状态要与实际一致
             paused = true
             romLoaded = false
+            refreshPlaceholder()
             statusBar.showMessage("复位失败：${c.lastError() ?: "无法重新加载 ROM"}")
             return
         }
@@ -883,6 +888,7 @@ class XuanMgbaController : MenuActions {
 
             romLoaded = true
             paused = false
+            refreshPlaceholder()
 
             // 更新状态栏
             Platform.runLater {
@@ -1002,6 +1008,12 @@ class XuanMgbaController : MenuActions {
         currentRom = null
         romLoaded = false
         paused = false
+        refreshPlaceholder()
+    }
+
+    /** 未加载 ROM 时显示 logo 占位页，加载完成后让出画面区域。 */
+    private fun refreshPlaceholder() {
+        placeholder.isVisible = !romLoaded
     }
 
     companion object {
@@ -1059,10 +1071,12 @@ internal fun systemDirectory(): File = AppPaths.systemDirectory().toFile()
 /** 弹出错误对话框（自动 dispatch 到 JavaFX 线程）。 */
 internal fun showError(title: String, message: String) {
     Platform.runLater {
-        Alert(Alert.AlertType.ERROR).apply {
+        val alert = Alert(Alert.AlertType.ERROR).apply {
             this.title = title
             headerText = title
             contentText = message
-        }.showAndWait()
+        }
+        UiTheme.applyAlert(alert)
+        alert.showAndWait()
     }
 }

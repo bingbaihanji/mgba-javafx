@@ -1,6 +1,7 @@
 package com.mgba.bingbaihanji.view.option
 
 import com.mgba.bingbaihanji.core.option.CoreOption
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.scene.control.ButtonType
@@ -58,16 +59,22 @@ class CoreOptionsDialog(
             prefViewportWidth = 440.0
         }
 
-        val hint = Label("部分选项（如 GB 机型）需要重新打开 ROM 才会完全生效")
-        hint.style = "-fx-text-fill: #888888; -fx-font-size: 11px;"
+        val hint = Label("部分选项（如 GB 机型）需要重新打开 ROM 才会完全生效").apply {
+            styleClass.add("hint-label")
+            isWrapText = true
+        }
 
-        val result = Dialog<ButtonType>().apply {
+        val dialog = Dialog<ButtonType>().apply {
             initOwner(owner)
             title = "核心选项"
+            headerText = "核心提供的可调参数"
             dialogPane.buttonTypes.addAll(ButtonType.OK, ButtonType.CANCEL)
             dialogPane.content = javafx.scene.layout.VBox(8.0, scroll, hint).apply { padding = Insets(4.0) }
-            dialogPane.prefWidth = 560.0
-        }.showAndWait().orElse(ButtonType.CANCEL)
+            dialogPane.prefWidth = 580.0
+        }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_SETTINGS)
+
+        val result = dialog.showAndWait().orElse(ButtonType.CANCEL)
 
         if (result != ButtonType.OK) {
             return

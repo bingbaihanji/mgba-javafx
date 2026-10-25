@@ -2,11 +2,14 @@ package com.mgba.bingbaihanji.view.menu
 
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.debug.DebugCategory
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.geometry.Insets
+import javafx.geometry.Pos
 import javafx.scene.control.*
 import javafx.scene.input.Clipboard
 import javafx.scene.input.DataFormat
 import javafx.scene.input.KeyCombination
+import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
 import java.net.URI
 
@@ -306,28 +309,43 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
             "mGBA Libretro" to "https://github.com/libretro/mgba"
         )
 
-        val content = VBox(6.0).apply {
-            padding = Insets(12.0, 16.0, 8.0, 16.0)
+        val content = VBox(10.0).apply {
+            padding = Insets(4.0, 4.0, 2.0, 4.0)
             children.addAll(
-                Label("基于 xuan (JavaFX + OpenGL) 的 mGBA 桌面端"),
-                Label("核心: mGBA Libretro"),
-                Label("版本: 1.0-SNAPSHOT"),
+                Label("版本 1.0-SNAPSHOT · 基于 xuan（JavaFX + OpenGL）").apply {
+                    styleClass.add("hint-label")
+                },
+                Label("模拟核心：mGBA Libretro"),
                 Separator(),
-                Label("相关仓库")
+                Label("相关仓库").apply { styleClass.add("section-title") }
             )
             links.forEach { (name, url) ->
-                children += Hyperlink("$name  $url").apply {
-                    tooltip = Tooltip("在浏览器中打开 $url")
-                    setOnAction { openUrl(url) }
+                children += HBox(12.0).apply {
+                    alignment = Pos.CENTER_LEFT
+                    children.addAll(
+                        Label(name).apply {
+                            minWidth = 96.0
+                            styleClass.add("repo-name")
+                        },
+                        Hyperlink(url).apply {
+                            tooltip = Tooltip("在浏览器中打开 $url")
+                            setOnAction { openUrl(url) }
+                        }
+                    )
                 }
             }
         }
 
-        Alert(Alert.AlertType.INFORMATION).apply {
+        val dialog = Dialog<ButtonType>().apply {
+            initOwner(scene?.window)
             title = "关于"
             headerText = "mGBA javafx"
+            dialogPane.buttonTypes.add(ButtonType.CLOSE)
             dialogPane.content = content
-        }.showAndWait()
+            dialogPane.prefWidth = 600.0
+        }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_ABOUT)
+        dialog.showAndWait()
     }
 
     /** 用系统默认浏览器打开链接；打不开时至少复制到剪贴板，方便手动访问。 */

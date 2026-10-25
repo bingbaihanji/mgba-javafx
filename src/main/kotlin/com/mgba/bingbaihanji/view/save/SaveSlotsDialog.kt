@@ -2,6 +2,7 @@ package com.mgba.bingbaihanji.view.save
 
 import com.mgba.bingbaihanji.core.save.GameSaveSession
 import com.mgba.bingbaihanji.core.save.SaveStateStore
+import com.mgba.bingbaihanji.view.theme.UiTheme
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.geometry.Pos
@@ -61,8 +62,10 @@ class SaveSlotsDialog(
             headerText = "保存时会自动记录当前画面作为缩略图"
             dialogPane.buttonTypes.add(ButtonType.CLOSE)
             dialogPane.content = listView
-            dialogPane.prefWidth = 640.0
+            dialogPane.prefWidth = 660.0
+            isResizable = true
         }
+        UiTheme.applyDialog(dialog, UiTheme.ICON_SAVE)
         dialog.showAndWait()
     }
 
@@ -92,11 +95,14 @@ class SaveSlotsDialog(
     }
 
     private fun delete(slot: Int) {
-        val confirmation = Alert(
-            Alert.AlertType.CONFIRMATION,
-            "确定删除槽位 ${slot + 1} 的存档与缩略图？",
-            ButtonType.OK, ButtonType.CANCEL
-        ).apply { initOwner(owner) }.showAndWait().orElse(ButtonType.CANCEL)
+        val alert = Alert(Alert.AlertType.CONFIRMATION).apply {
+            initOwner(owner)
+            title = "删除存档"
+            headerText = "删除槽位 ${slot + 1}？"
+            contentText = "存档与缩略图会一起删除，且无法恢复。"
+        }
+        UiTheme.applyAlert(alert, UiTheme.ICON_SAVE)
+        val confirmation = alert.showAndWait().orElse(ButtonType.CANCEL)
         if (confirmation != ButtonType.OK) {
             return
         }
@@ -127,7 +133,7 @@ class SaveSlotsDialog(
         }
 
         private val placeholder = Label("无预览").apply {
-            style = "-fx-text-fill: #777777; -fx-font-size: 11px;"
+            styleClass.add("hint-label")
         }
 
         private val previewBox = StackPane(placeholder, preview).apply {
@@ -135,20 +141,22 @@ class SaveSlotsDialog(
             prefHeight = 120.0
             minWidth = 160.0
             minHeight = 120.0
-            style = "-fx-background-color: #1E1E2A; -fx-background-radius: 3;"
+            styleClass.add("slot-preview")
         }
 
         private val titleLabel = Label().apply {
-            style = "-fx-font-size: 13px; -fx-font-weight: bold;"
+            styleClass.add("cell-title")
         }
 
         private val timeLabel = Label().apply {
-            style = "-fx-text-fill: #888888; -fx-font-size: 11px;"
+            styleClass.add("cell-time")
         }
 
-        private val saveButton = Button("保存")
-        private val loadButton = Button("读取")
-        private val deleteButton = Button("删除")
+        private val saveButton = Button("保存").apply { styleClass.add("slot-action") }
+        private val loadButton = Button("读取").apply { styleClass.add("slot-action") }
+        private val deleteButton = Button("删除").apply {
+            styleClass.addAll("slot-action", "danger")
+        }
 
         private val details = VBox(4.0, titleLabel, timeLabel)
 
