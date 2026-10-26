@@ -206,11 +206,16 @@ class GameMenuBar(private val actions: MenuActions) : MenuBar() {
         return Menu("音频(_A)").apply {
             items.addAll(
                 MenuItem("静音(_M)").apply {
-                    accelerator = KeyCombination.valueOf("M")
+                    // 必须带修饰键：裸 "M" 会在游戏过程中被误触，静音后下次启动还听不到声音
+                    accelerator = KeyCombination.valueOf("Shortcut+M")
                     setOnAction { actions.onToggleMute() }
                 },
                 SeparatorMenuItem(),
-                volumeMenu
+                volumeMenu,
+                SeparatorMenuItem(),
+                MenuItem("均衡器(_E)...").apply {
+                    setOnAction { actions.onOpenEqualizer() }
+                }
             )
         }
     }
@@ -416,4 +421,7 @@ interface MenuActions {
 
     /** 打开核心选项对话框。 */
     fun onOpenCoreOptions()
+
+    /** 打开均衡器对话框。 */
+    fun onOpenEqualizer()
 }

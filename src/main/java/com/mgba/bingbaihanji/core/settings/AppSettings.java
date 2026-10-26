@@ -17,6 +17,20 @@ public final class AppSettings {
     /** 声音开关。 */
     public boolean enableSound = true;
 
+    /** 均衡器开关。 */
+    public boolean eqEnabled = false;
+
+    /** 均衡器前置增益（dB，-12 ~ +12）。 */
+    public double eqPreampDb = 0.0;
+
+    /**
+     * 均衡器各频段增益（dB，-12 ~ +12），固定 10 个频段：
+     * 31 / 62 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz。
+     *
+     * <p>用列表而不是数组：旧配置缺项时按 0 dB 补齐即可。
+     */
+    public java.util.List<Double> eqBandGainsDb = defaultEqBands();
+
     /** 是否拉伸填充（关闭时等比 letterbox）。 */
     public boolean stretchToFit = false;
 
@@ -48,6 +62,15 @@ public final class AppSettings {
      */
     public java.util.Map<String, Boolean> debugSections = new java.util.LinkedHashMap<>();
 
+    /** 默认均衡曲线：10 段全 0 dB。 */
+    private static java.util.List<Double> defaultEqBands() {
+        java.util.List<Double> bands = new java.util.ArrayList<>(10);
+        for (int i = 0; i < 10; i++) {
+            bands.add(0.0);
+        }
+        return bands;
+    }
+
     /**
      * 复制一份设置（对话框确认时用，取消不能改动原对象）。
      *
@@ -58,6 +81,9 @@ public final class AppSettings {
         copy.gameSpeed = gameSpeed;
         copy.soundVolume = soundVolume;
         copy.enableSound = enableSound;
+        copy.eqEnabled = eqEnabled;
+        copy.eqPreampDb = eqPreampDb;
+        copy.eqBandGainsDb = new java.util.ArrayList<>(eqBandGainsDb);
         copy.stretchToFit = stretchToFit;
         copy.linearFiltering = linearFiltering;
         copy.integerScaling = integerScaling;

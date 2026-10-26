@@ -3,6 +3,9 @@ package com.mgba.bingbaihanji.view
 import com.bingbaihanji.xuan.renderer.Gc
 import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.audio.AudioSync
+import com.mgba.bingbaihanji.core.audio.GraphicEqualizer
+import com.mgba.bingbaihanji.core.audio.spectrum.SpectrumAnalyzer
+import com.mgba.bingbaihanji.core.audio.spectrum.SpectrumTubePainter
 import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
@@ -20,6 +23,7 @@ import com.mgba.bingbaihanji.platform.desktop.audio.SourceDataLineAudioSink
 import com.mgba.bingbaihanji.platform.desktop.input.KeyMapping
 import com.mgba.bingbaihanji.platform.desktop.video.ShaderPreset
 import com.mgba.bingbaihanji.view.XuanMgbaController.Companion.FAST_FORWARD_SPEED
+import com.mgba.bingbaihanji.view.audio.EqualizerDialog
 import com.mgba.bingbaihanji.view.cheat.CheatDialog
 import com.mgba.bingbaihanji.view.debug.DebugCategory
 import com.mgba.bingbaihanji.view.debug.DebugOverlay
@@ -119,6 +123,30 @@ class XuanMgbaController : MenuActions {
     private val audioSync = AudioSync()
     private var audioSyncTimer: Timeline? = null
 
+    /** 均衡器：插在音频泵写声卡之前，实时生效。 */
+    private val equalizer = GraphicEqualizer()
+
+    /** 频谱分析：音频泵每批 PCM 喂一次，GL 线程取快照绘制。 */
+    private val spectrumAnalyzer = SpectrumAnalyzer()
+
+    /** 状态栏频谱试管的 Gc 绘制器（GL 线程私有）。 */
+    private val spectrumPainter = SpectrumTubePainter()
+
+    /** 从分析器拷贝幅度的工作缓冲（GL 线程私有）。 */
+    private val spectrumScratch = FloatArray(SpectrumAnalyzer.BAND_COUNT)
+
+    /** 频谱槽位矩形 `[x, y, w, h]`（场景坐标，逻辑像素）。 */
+    private val spectrumRect = DoubleArray(4)
+
+    /**
+     * 根容器（与 GL 画布同处一个 StackPane）在场景中的原点 `[x, y]`（逻辑像素）。
+     *
+     * <p>Gc 的坐标原点在 GL 画布左上角，而状态栏发布的是场景坐标；
+     * 场景根有 5px 内边距，两者差一个偏移，必须减掉，否则频谱整体右下偏。
+     */
+    @Volatile
+    private var canvasOrigin: DoubleArray? = null
+
     @Volatile
     private var lastAudioCorrection = 1.0
 
@@ -179,6 +207,8 @@ class XuanMgbaController : MenuActions {
         menuBar.selectVolume(settings.soundVolume)
         menuBar.selectDebugOverlay(settings.showDebugOverlay)
         menuBar.applyDebugSections(debugSectionMap())
+        applyEqualizerSettings(settings)
+        statusBar.setMuted(!settings.enableSound)
 
         val savedPreset = runCatching { ShaderPreset.valueOf(settings.shaderPreset) }
             .getOrDefault(ShaderPreset.OFF)
@@ -214,6 +244,14 @@ class XuanMgbaController : MenuActions {
         rootPane.prefWidthProperty().bind(overlay.widthProperty())
         rootPane.prefHeightProperty().bind(overlay.heightProperty())
         overlay.children.add(rootPane)
+        updateCanvasOrigin()
+        rootPane.localToSceneTransformProperty().addListener { _, _, _ -> updateCanvasOrigin() }
+    }
+
+    /** 记录根容器在场景中的原点，供 GL 坐标换算（JavaFX 线程）。 */
+    private fun updateCanvasOrigin() {
+        val point = rootPane.localToScene(0.0, 0.0)
+        canvasOrigin = doubleArrayOf(point.x, point.y)
     }
 
     // ── 渲染（GL 线程调用）─────────────────────────────────────
@@ -244,6 +282,36 @@ class XuanMgbaController : MenuActions {
         val topPx = if (menuBar.isManaged) (menuBar.layoutBounds.height * scale).toFloat() else 0f
         val bottomPx = if (statusBar.isManaged) (statusBar.layoutBounds.height * scale).toFloat() else 0f
         videoRenderer.render(gc, if (romLoaded) core else null, canvasWidth, canvasHeight, topPx, bottomPx)
+        drawStatusSpectrum(gc, scale)
+    }
+
+    /**
+     * 把音频频谱画进状态栏右侧的槽位。
+     *
+     * 槽位是 JavaFX 节点，但不参与 JavaFX 绘制：底色与试管一起走主画布的
+     * [Gc] 批处理管线，画在槽位正下方的 GL 区域上，一帧 128 根试管汇进同一次顶点提交。
+     */
+    private fun drawStatusSpectrum(gc: Gc, scale: Float) {
+        if (!statusBar.isManaged) {
+            return
+        }
+        if (!statusBar.spectrumSceneRect(spectrumRect)) {
+            return
+        }
+        // 场景坐标 → GL 画布坐标：先减掉画布在场景里的原点，再乘设备像素缩放
+        val origin = canvasOrigin ?: return
+        val x = ((spectrumRect[0] - origin[0]) * scale).toFloat()
+        val y = ((spectrumRect[1] - origin[1]) * scale).toFloat()
+        val w = (spectrumRect[2] * scale).toFloat()
+        val h = (spectrumRect[3] * scale).toFloat()
+        if (w <= 1f || h <= 1f) {
+            return
+        }
+        spectrumAnalyzer.copyMagnitudes(spectrumScratch)
+        // frameTimeMs 是指数滑动平均的帧间隔（毫秒），当动画步长足够平滑
+        val deltaSeconds = (frameTimeMs / 1000.0).coerceIn(0.0, 0.1)
+        spectrumPainter.update(spectrumScratch, deltaSeconds)
+        spectrumPainter.draw(gc, x, y, w, h, scale)
     }
 
     // ── 输入（JavaFX 线程调用）─────────────────────────────────
@@ -350,6 +418,8 @@ class XuanMgbaController : MenuActions {
         if (paused) {
             loop?.stop()
             audioPump?.pause()
+            // 暂停后不再喂数据，频谱要主动清空，否则会停在最后一帧
+            spectrumAnalyzer.clear()
             saveBatteryQuietly()
             statusBar.showMessage("已暂停")
         } else {
@@ -708,6 +778,7 @@ class XuanMgbaController : MenuActions {
 
         volume = updated.soundVolume / 100f
         applyEffectiveVolume()
+        statusBar.setMuted(!updated.enableSound)
         menuBar.selectVolume(updated.soundVolume)
 
         videoRenderer.setStretchToFit(updated.stretchToFit)
@@ -730,8 +801,24 @@ class XuanMgbaController : MenuActions {
             onToggleDebugOverlay(updated.showDebugOverlay)
         }
 
+        applyEqualizerSettings(updated)
+
         persistSettings()
         statusBar.showMessage("设置已应用")
+    }
+
+    /** 把设置里的均衡曲线写进均衡器。旧配置缺频段时按 0 dB 补齐。 */
+    private fun applyEqualizerSettings(from: AppSettings) {
+        equalizer.isEnabled = from.eqEnabled
+        equalizer.preampDb = from.eqPreampDb
+        val gains = DoubleArray(GraphicEqualizer.BAND_COUNT)
+        from.eqBandGainsDb?.forEachIndexed { index, value ->
+            if (index < gains.size) {
+                gains[index] = value
+            }
+        }
+        equalizer.setBandGainsDb(gains)
+        statusBar.setEqualizerActive(equalizer.isEnabled)
     }
 
     private fun persistSettings() {
@@ -774,10 +861,20 @@ class XuanMgbaController : MenuActions {
         CheatDialog(rootPane.scene?.window, service).show()
     }
 
+    override fun onOpenEqualizer() {
+        EqualizerDialog(rootPane.scene?.window, equalizer, spectrumAnalyzer, settings) { updated ->
+            settings = updated
+            applyEqualizerSettings(updated)
+            persistSettings()
+            statusBar.showMessage("均衡器设置已保存")
+        }.show()
+    }
+
     override fun onToggleMute() {
         settings.enableSound = !settings.enableSound
         volume = settings.soundVolume / 100f
         applyEffectiveVolume()
+        statusBar.setMuted(!settings.enableSound)
         statusBar.showMessage(if (settings.enableSound) "声音已开启" else "已静音")
         persistSettings()
     }
@@ -787,6 +884,7 @@ class XuanMgbaController : MenuActions {
         settings.soundVolume = (volume * 100).toInt()
         settings.enableSound = true
         applyEffectiveVolume()
+        statusBar.setMuted(false)
         persistSettings()
     }
 
@@ -883,7 +981,11 @@ class XuanMgbaController : MenuActions {
             // 音频
             val sink = SourceDataLineAudioSink(av.sampleRate)
             audioSink = sink
+            equalizer.setSampleRate(av.sampleRate)
+            spectrumAnalyzer.setSampleRate(av.sampleRate)
             val pump = AudioPump(c, sink)
+            pump.setEqualizer(equalizer)
+            pump.setAnalyzer(spectrumAnalyzer)
             // 设备打不开时明确提示，而不是让画面正常但完全没有声音
             pump.setOnAudioUnavailable {
                 Platform.runLater {
@@ -913,8 +1015,11 @@ class XuanMgbaController : MenuActions {
                 statusBar.setSpeed(speedMultiplier)
                 val (w, h) = videoRenderer.resolution()
                 statusBar.setResolution(w, h)
-                if (restoredBattery > 0) {
-                    statusBar.showMessage("已恢复电池存档")
+                // 静音时明确说出来：否则"画面正常但完全没有声音"会被当成音频坏了
+                when {
+                    !settings.enableSound ->
+                        statusBar.showMessage("当前已静音：按 Ctrl+M 或音频菜单开启声音", 6.0)
+                    restoredBattery > 0 -> statusBar.showMessage("已恢复电池存档")
                 }
             }
 
@@ -1011,6 +1116,8 @@ class XuanMgbaController : MenuActions {
         runCatching { loop?.stop() }
         runCatching { audioPump?.stop() }
         runCatching { audioSink?.close() }
+        // 换 ROM / 退出时频谱归零，避免下一次加载前还挂着上一局的最后一帧
+        spectrumAnalyzer.clear()
         // 先写电池存档，再卸载核心
         saveBatteryQuietly()
         runCatching { core?.unloadGame() }

@@ -1,5 +1,6 @@
 package com.mgba.bingbaihanji.core.audio;
 
+import com.mgba.bingbaihanji.core.audio.spectrum.SpectrumAnalyzer;
 import com.mgba.bingbaihanji.core.emulation.AudioSource;
 
 import java.nio.ByteBuffer;
@@ -43,11 +44,35 @@ public final class AudioPump {
     /** 音频设备打开失败时的回调（在泵线程调用，实现方自行切回 UI 线程）。 */
     private volatile Runnable onAudioUnavailable;
 
+    /** 均衡器（可选）：写声卡之前就地处理 PCM。 */
+    private volatile GraphicEqualizer equalizer;
+
+    /** 频谱分析器（可选）：写声卡之前把 PCM 喂给它。 */
+    private volatile SpectrumAnalyzer analyzer;
+
     public AudioPump(AudioSource source, AudioSink sink) {
         this.source = source;
         this.sink = sink;
         this.pcmBuffer = ByteBuffer.allocateDirect(READ_BATCH_FRAMES * 4).order(ByteOrder.LITTLE_ENDIAN);
         this.pcmArray = new short[READ_BATCH_FRAMES * 2];
+    }
+
+    /**
+     * 挂接均衡器。传 null 摘除。
+     *
+     * @param equalizer 均衡器
+     */
+    public void setEqualizer(GraphicEqualizer equalizer) {
+        this.equalizer = equalizer;
+    }
+
+    /**
+     * 挂接频谱分析器。传 null 摘除。
+     *
+     * @param analyzer 分析器
+     */
+    public void setAnalyzer(SpectrumAnalyzer analyzer) {
+        this.analyzer = analyzer;
     }
 
     /**
@@ -153,6 +178,15 @@ public final class AudioPump {
             }
 
             copyToShortArray(frames);
+            // 均衡器就地改写 PCM；频谱分析取的是「耳朵实际听到的」处理后数据
+            GraphicEqualizer eq = equalizer;
+            if (eq != null) {
+                eq.process(pcmArray, frames);
+            }
+            SpectrumAnalyzer spec = analyzer;
+            if (spec != null) {
+                spec.feed(pcmArray, frames);
+            }
             if (audioAvailable) {
                 sink.write(pcmArray, frames);
             }

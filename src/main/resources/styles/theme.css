@@ -351,6 +351,14 @@
     -fx-font-size: 11px;
 }
 
+/* ── 底部状态栏 ─────────────────────────────────────────── */
+
+/* SplitPane 默认分隔条是亮灰色，在深色状态栏里像一道裂缝；压成一条暗线 */
+.game-status-bar > .split-pane-divider {
+    -fx-background-color: #1B1B27;
+    -fx-padding: 0 1 0 1;
+}
+
 /* ── 启动占位页（深色 GL 画面上，保留浅色文字）───────────── */
 
 .start-placeholder {
