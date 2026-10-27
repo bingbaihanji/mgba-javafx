@@ -3,9 +3,10 @@ package com.mgba.bingbaihanji.view
 import com.bingbaihanji.xuan.renderer.Gc
 import com.mgba.bingbaihanji.core.audio.AudioPump
 import com.mgba.bingbaihanji.core.audio.AudioSync
+import com.mgba.bingbaihanji.core.audio.EqPreset
 import com.mgba.bingbaihanji.core.audio.GraphicEqualizer
 import com.mgba.bingbaihanji.core.audio.spectrum.SpectrumAnalyzer
-import com.mgba.bingbaihanji.core.audio.spectrum.SpectrumTubePainter
+import com.mgba.bingbaihanji.core.audio.spectrum.FluorescentTube
 import com.mgba.bingbaihanji.core.cheat.CheatService
 import com.mgba.bingbaihanji.core.emulation.EmulationLoop
 import com.mgba.bingbaihanji.core.emulation.GbaButton
@@ -130,7 +131,7 @@ class XuanMgbaController : MenuActions {
     private val spectrumAnalyzer = SpectrumAnalyzer()
 
     /** 状态栏频谱试管的 Gc 绘制器（GL 线程私有）。 */
-    private val spectrumPainter = SpectrumTubePainter()
+    private val spectrumPainter = FluorescentTube()
 
     /** 从分析器拷贝幅度的工作缓冲（GL 线程私有）。 */
     private val spectrumScratch = FloatArray(SpectrumAnalyzer.BAND_COUNT)
@@ -807,17 +808,28 @@ class XuanMgbaController : MenuActions {
         statusBar.showMessage("设置已应用")
     }
 
-    /** 把设置里的均衡曲线写进均衡器。旧配置缺频段时按 0 dB 补齐。 */
+    /**
+     * 把设置里的均衡曲线写进均衡器。
+     *
+     * <p>选了固定预设就以 [EqPreset] 里的曲线为准（不含前置增益）；
+     * 自定义才读 `eqPreampDb` / `eqBandGainsDb`，旧配置缺频段时按 0 dB 补齐。
+     */
     private fun applyEqualizerSettings(from: AppSettings) {
         equalizer.isEnabled = from.eqEnabled
-        equalizer.preampDb = from.eqPreampDb
-        val gains = DoubleArray(GraphicEqualizer.BAND_COUNT)
-        from.eqBandGainsDb?.forEachIndexed { index, value ->
-            if (index < gains.size) {
-                gains[index] = value
+        val preset = EqPreset.fromName(from.eqPreset)
+        if (preset.isCustom) {
+            equalizer.preampDb = from.eqPreampDb
+            val gains = DoubleArray(GraphicEqualizer.BAND_COUNT)
+            from.eqBandGainsDb?.forEachIndexed { index, value ->
+                if (index < gains.size) {
+                    gains[index] = value
+                }
             }
+            equalizer.setBandGainsDb(gains)
+        } else {
+            equalizer.preampDb = 0.0
+            equalizer.setBandGainsDb(preset.gains() ?: DoubleArray(GraphicEqualizer.BAND_COUNT))
         }
-        equalizer.setBandGainsDb(gains)
         statusBar.setEqualizerActive(equalizer.isEnabled)
     }
 

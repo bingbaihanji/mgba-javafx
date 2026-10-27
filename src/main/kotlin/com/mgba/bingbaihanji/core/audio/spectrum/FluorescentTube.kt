@@ -5,9 +5,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * 频谱「发光试管」的 xuan [Gc] 绘制器。
+ * 频谱「辉光管」的 xuan [Gc] 绘制器。
  *
- * 状态栏频谱（主画布）与均衡器预览（[SpectrumTubeView] 自带的 GL 画布）
+ * 状态栏频谱（主画布）与均衡器预览（[FluorescentTubeView] 自带的 GL 画布）
  * 共用这一份绘制代码：以中心线为轴上下对称的 64 根中空试管
  * （数据取 128 个频段的偶数下标）、绿 → 黄 → 红的横向渐变、四层半透明发光。
  *
@@ -20,7 +20,7 @@ import kotlin.math.min
  * @param background 槽位底色（ARGB）。状态栏用与信息条一致的深灰，
  *                   对话框预览用更深的独立面板色。
  */
-class SpectrumTubePainter(
+class FluorescentTube(
     private val background: Int = STATUS_BAR_BACKGROUND
 ) {
 

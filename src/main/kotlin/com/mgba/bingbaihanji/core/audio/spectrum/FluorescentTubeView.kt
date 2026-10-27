@@ -15,7 +15,7 @@ import javafx.scene.layout.StackPane
  * JavaFX 窗口，不在主窗口那张 GL 画布的场景中，无法复用主画布的 `Gc`；
  * 所以由组件自己持有一份上下文，`dispose()` 时释放。
  *
- * <p>绘制代码与状态栏频谱共用 [SpectrumTubePainter]，两边是同一套视觉。
+ * <p>绘制代码与状态栏频谱共用 [FluorescentTube]，两边是同一套视觉。
  *
  * <p>线程模型：[updateSpectrum] 可在任意线程调用（整体替换数组引用发布），
  * 其余绘制状态只在 GL 线程读写。
@@ -23,9 +23,9 @@ import javafx.scene.layout.StackPane
  * @param viewWidth  组件宽度（逻辑像素）
  * @param viewHeight 组件高度（逻辑像素），默认按 18.5:1 计算
  */
-class SpectrumTubeView @JvmOverloads constructor(
+class FluorescentTubeView @JvmOverloads constructor(
     private val viewWidth: Double = DEFAULT_WIDTH,
-    private val viewHeight: Double = viewWidth / SpectrumTubePainter.ASPECT
+    private val viewHeight: Double = viewWidth / FluorescentTube.ASPECT
 ) : StackPane(), AudioSpectrumVisualizer {
 
     /**
@@ -36,7 +36,7 @@ class SpectrumTubeView @JvmOverloads constructor(
      */
     private val transfer = FXGLTransfer(fps = TARGET_FPS)
 
-    private val painter = SpectrumTubePainter(SpectrumTubePainter.PREVIEW_BACKGROUND)
+    private val painter = FluorescentTube(FluorescentTube.PREVIEW_BACKGROUND)
 
     /** 目标幅度（dB）；整体替换引用发布，GL 线程一次取走完整快照。 */
     @Volatile

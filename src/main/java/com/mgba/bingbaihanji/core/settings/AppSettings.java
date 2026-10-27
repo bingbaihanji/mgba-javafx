@@ -20,11 +20,19 @@ public final class AppSettings {
     /** 均衡器开关。 */
     public boolean eqEnabled = false;
 
-    /** 均衡器前置增益（dB，-12 ~ +12）。 */
+    /**
+     * 均衡器预设名（{@code EqPreset} 的枚举名）。
+     *
+     * <p>{@code "CUSTOM"} 表示自定义曲线，此时下面两个字段才是生效曲线；
+     * 选了固定预设则以 {@code EqPreset} 里的曲线为准，这两个字段被忽略。
+     */
+    public String eqPreset = "CUSTOM";
+
+    /** 自定义曲线的前置增益（dB，-12 ~ +12）；预设下恒为 0。 */
     public double eqPreampDb = 0.0;
 
     /**
-     * 均衡器各频段增益（dB，-12 ~ +12），固定 10 个频段：
+     * 自定义曲线的各频段增益（dB，-12 ~ +12），固定 10 个频段：
      * 31 / 62 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz。
      *
      * <p>用列表而不是数组：旧配置缺项时按 0 dB 补齐即可。
@@ -82,6 +90,7 @@ public final class AppSettings {
         copy.soundVolume = soundVolume;
         copy.enableSound = enableSound;
         copy.eqEnabled = eqEnabled;
+        copy.eqPreset = eqPreset;
         copy.eqPreampDb = eqPreampDb;
         copy.eqBandGainsDb = new java.util.ArrayList<>(eqBandGainsDb);
         copy.stretchToFit = stretchToFit;
